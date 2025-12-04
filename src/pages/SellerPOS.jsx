@@ -1,10 +1,13 @@
 import React, { useState, useEffect } from "react";
 import { auth, Sale, TicketType, Notification, AuditLog } from "@/api/entities";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useKiosk } from "@/contexts/KioskContext";
+import * as ticketTypesService from "@/firebase/services/ticketTypes";
 import { 
   ShoppingCart, 
   Search,
-  Check
+  Check,
+  Package
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -25,6 +28,7 @@ export default function SellerPOS() {
   const [paymentOpen, setPaymentOpen] = useState(false);
   const [selectedTicket, setSelectedTicket] = useState(null);
   const [isProcessing, setIsProcessing] = useState(false);
+  const { currentKiosk, isLoading: kioskLoading } = useKiosk();
   
   const queryClient = useQueryClient();
 
@@ -41,8 +45,25 @@ export default function SellerPOS() {
   }, []);
 
   const { data: tickets = [], isLoading } = useQuery({
-    queryKey: ['tickets-active'],
-    queryFn: () => TicketType.filter({ is_active: true }),
+    queryKey: ['tickets-active', currentKiosk?.id],
+    queryFn: async () => {
+      if (!currentKiosk?.id) {
+        console.warn('SellerPOS: No currentKiosk available');
+        return [];
+      }
+      try {
+        const result = await ticketTypesService.getTicketTypesByFilter({ 
+          is_active: true, 
+          kiosk_id: currentKiosk.id 
+        });
+        console.log('SellerPOS: Loaded tickets:', result.length, 'for kiosk:', currentKiosk.id);
+        return result;
+      } catch (error) {
+        console.error('SellerPOS: Error loading tickets:', error);
+        return [];
+      }
+    },
+    enabled: !kioskLoading && !!currentKiosk?.id,
   });
 
   const { data: notifications = [] } = useQuery({
@@ -141,6 +162,10 @@ export default function SellerPOS() {
       }));
 
       // Create sale
+      if (!currentKiosk?.id) {
+        throw new Error('לא ניתן ליצור מכירה ללא קיוסק נבחר');
+      }
+      
       const sale = await Sale.create({
         seller_id: user?.id,
         seller_name: user?.full_name || user?.email,
@@ -149,6 +174,7 @@ export default function SellerPOS() {
         payment_method: paymentMethod,
         notes,
         status: "completed",
+        kiosk_id: currentKiosk.id,
       });
 
       // Update inventory for each ticket
@@ -219,6 +245,7 @@ export default function SellerPOS() {
           target_id: sale.id,
           target_type: "Sale",
           details: { items, total: calculateTotal(), payment_method: paymentMethod },
+          kiosk_id: currentKiosk?.id,
         });
       } catch (auditError) {
         // Log error but don't fail the sale
@@ -317,7 +344,22 @@ export default function SellerPOS() {
           </div>
 
           {/* Ticket Grid */}
-          {isLoading ? (
+          {kioskLoading ? (
+            <div className="flex items-center justify-center py-12">
+              <div className="text-center">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4"></div>
+                <p className="text-muted-foreground">טוען נתוני קיוסק...</p>
+              </div>
+            </div>
+          ) : !currentKiosk ? (
+            <div className="flex items-center justify-center py-12">
+              <div className="text-center">
+                <Package className="h-12 w-12 mx-auto mb-4 text-muted-foreground opacity-50" />
+                <p className="text-lg font-medium text-foreground mb-2">לא נמצא קיוסק</p>
+                <p className="text-sm text-muted-foreground">אנא פנה למנהל המערכת</p>
+              </div>
+            </div>
+          ) : isLoading ? (
             <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
               {[...Array(10)].map((_, i) => (
                 <div key={i} className="bg-card rounded-2xl p-4 animate-pulse">
@@ -326,6 +368,14 @@ export default function SellerPOS() {
                   <div className="h-6 bg-accent rounded w-1/2" />
                 </div>
               ))}
+            </div>
+          ) : filteredTickets.length === 0 ? (
+            <div className="flex items-center justify-center py-12">
+              <div className="text-center">
+                <Package className="h-12 w-12 mx-auto mb-4 text-muted-foreground opacity-50" />
+                <p className="text-lg font-medium text-foreground mb-2">אין כרטיסים זמינים</p>
+                <p className="text-sm text-muted-foreground">אין כרטיסים פעילים בקיוסק זה</p>
+              </div>
             </div>
           ) : (
             <TicketGrid

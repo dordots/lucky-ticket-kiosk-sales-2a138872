@@ -3,8 +3,11 @@ import { auth, Sale, TicketType, User } from "@/api/entities";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
 import { createPageUrl } from "@/utils";
+import { useKiosk } from "@/contexts/KioskContext";
 import { format, startOfDay, endOfDay, startOfMonth, startOfWeek, endOfWeek, startOfYear, endOfYear } from "date-fns";
 import { he } from "date-fns/locale";
+import * as salesService from "@/firebase/services/sales";
+import * as ticketTypesService from "@/firebase/services/ticketTypes";
 import { 
   DollarSign, 
   ShoppingCart, 
@@ -24,6 +27,7 @@ import SalesChart from "@/components/dashboard/SalesChart";
 export default function Dashboard() {
   const [user, setUser] = useState(null);
   const [salesPeriod, setSalesPeriod] = useState("week"); // day, week, month, year
+  const { currentKiosk, isLoading: kioskLoading } = useKiosk();
 
   useEffect(() => {
     const loadUser = async () => {
@@ -38,13 +42,29 @@ export default function Dashboard() {
   }, []);
 
   const { data: sales = [], isLoading: salesLoading } = useQuery({
-    queryKey: ['sales-all'],
-    queryFn: () => Sale.list('-created_date', 100),
+    queryKey: ['sales-dashboard', currentKiosk?.id],
+    queryFn: () => {
+      if (currentKiosk?.id) {
+        return salesService.getSalesByKiosk(currentKiosk.id, 100);
+      } else if (user?.role === 'system_manager') {
+        return salesService.getAllSales(100);
+      }
+      return [];
+    },
+    enabled: !kioskLoading && (!!currentKiosk || user?.role === 'system_manager'),
   });
 
   const { data: tickets = [], isLoading: ticketsLoading } = useQuery({
-    queryKey: ['tickets-all'],
-    queryFn: () => TicketType.list(),
+    queryKey: ['tickets-dashboard', currentKiosk?.id],
+    queryFn: () => {
+      if (currentKiosk?.id) {
+        return ticketTypesService.getTicketTypesByKiosk(currentKiosk.id);
+      } else if (user?.role === 'system_manager') {
+        return ticketTypesService.getAllTicketTypes();
+      }
+      return [];
+    },
+    enabled: !kioskLoading && (!!currentKiosk || user?.role === 'system_manager'),
   });
 
   const { data: users = [] } = useQuery({

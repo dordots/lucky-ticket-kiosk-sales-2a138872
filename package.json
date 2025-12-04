@@ -9,7 +9,9 @@
     "lint": "eslint .",
     "preview": "vite preview",
     "seed": "node scripts/seed-firebase.js",
-    "seed-pais": "node scripts/seed-pais-tickets.js"
+    "seed-pais": "node scripts/seed-pais-tickets.js",
+    "seed-multi-kiosk": "node scripts/seed-multi-kiosk.js",
+    "migrate": "node scripts/migrate-to-multi-kiosk.js"
   },
   "dependencies": {
     "@base44/sdk": "^0.1.2",

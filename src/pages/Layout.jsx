@@ -6,6 +6,7 @@ import { auth, Notification } from "@/api/entities";
 import { firebase } from "@/api/firebaseClient";
 import { useQuery } from "@tanstack/react-query";
 import Login from "./Login";
+import { useKiosk } from "@/contexts/KioskContext";
 import { 
   ShoppingCart, 
   LayoutDashboard, 
@@ -18,7 +19,9 @@ import {
   X,
   LogOut,
   ChevronLeft,
-  Settings
+  Settings,
+  Store,
+  ShieldAlert
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -27,7 +30,16 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 export default function Layout({ children, currentPageName }) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -35,6 +47,7 @@ export default function Layout({ children, currentPageName }) {
   const [isLoading, setIsLoading] = useState(true);
   const location = useLocation();
   const navigate = useNavigate();
+  const { currentKiosk, allKiosks, selectKiosk, canSelectKiosk, isLoading: kioskLoading } = useKiosk();
 
   useEffect(() => {
     // Listen to auth state changes
@@ -62,31 +75,59 @@ export default function Layout({ children, currentPageName }) {
   }, [location.pathname, navigate]);
 
   const { data: notifications = [] } = useQuery({
-    queryKey: ['notifications-unread'],
-    queryFn: () => Notification.filter({ is_read: false }),
+    queryKey: ['notifications-unread', user?.id],
+    queryFn: () => {
+      // System managers don't need notifications
+      if (user?.role === 'system_manager') {
+        return [];
+      }
+      return Notification.filter({ is_read: false });
+    },
+    enabled: !!user && user.role !== 'system_manager',
     refetchInterval: 30000,
   });
 
   const isOwner = user?.position === 'owner' || user?.role === 'admin';
+  const isSystemManager = user?.role === 'system_manager';
+  const isFranchisee = user?.role === 'franchisee';
 
   const navItems = [
     { name: "דף מכירה", icon: ShoppingCart, page: "SellerPOS", roles: ['all'] },
-    { name: "לוח בקרה", icon: LayoutDashboard, page: "Dashboard", roles: ['all', 'owner'] },
-    { name: "מלאי", icon: Package, page: "Inventory", roles: ['owner'] },
-    { name: "היסטוריית מכירות", icon: History, page: "SalesHistory", roles: ['all'] },
-    { name: "משתמשים", icon: Users, page: "UsersManagement", roles: ['owner'] },
-    { name: "דוחות", icon: BarChart3, page: "Reports", roles: ['owner'] },
-    { name: "יומן פעולות", icon: History, page: "AuditLog", roles: ['owner'] },
+    { name: "לוח בקרה", icon: LayoutDashboard, page: "Dashboard", roles: ['all', 'owner', 'franchisee'] },
+    { name: "מלאי", icon: Package, page: "Inventory", roles: ['owner', 'franchisee'] },
+    { name: "היסטוריית מכירות", icon: History, page: "SalesHistory", roles: ['all', 'franchisee'] },
+    { name: "פרטי קיוסק", icon: Store, page: "KioskDetails", roles: ['franchisee'] },
+    { name: "משתמשים", icon: Users, page: "UsersManagement", roles: ['owner', 'franchisee'] },
+    { name: "קיוסקים", icon: Store, page: "KiosksManagement", roles: ['system_manager'] },
+    { name: "לוח בקרה - קיוסקים", icon: LayoutDashboard, page: "KiosksDashboard", roles: ['system_manager'] },
+    { name: "זכיינים", icon: ShieldAlert, page: "FranchiseesManagement", roles: ['system_manager'] },
+    { name: "דוחות", icon: BarChart3, page: "Reports", roles: ['owner', 'franchisee'] },
+    { name: "יומן פעולות", icon: History, page: "AuditLog", roles: ['owner', 'franchisee'] },
     { name: "הגדרות", icon: Settings, page: "Settings", roles: ['all'] },
   ];
 
   const filteredNavItems = navItems.filter(item => {
-    // If user is seller, show only SellerPOS
-    if (user && user.position === 'seller' && user.role !== 'admin') {
-      return item.page === 'SellerPOS';
+    if (!user) return false;
+    
+    // System managers see only: Kiosks, Kiosks Dashboard, Settings
+    if (user.role === 'system_manager') {
+      return item.roles.includes('system_manager') || item.page === 'Settings';
     }
+    
+    // Assistants see only: SellerPOS, Settings
+    if (user.role === 'assistant') {
+      return item.page === 'SellerPOS' || item.page === 'Settings';
+    }
+    
+    // Franchisees see: SellerPOS, Dashboard, Inventory, SalesHistory, Users, Reports, AuditLog, Settings
+    if (user.role === 'franchisee') {
+      if (item.roles.includes('all')) return true;
+      if (item.roles.includes('owner') || item.roles.includes('franchisee')) return true;
+      return false;
+    }
+    
+    // Legacy owner role (for backward compatibility)
     if (item.roles.includes('all')) return true;
-    if (!user) return false; // אם אין משתמש, הצג רק 'all'
     if (item.roles.includes('owner') && isOwner) return true;
     return false;
   });
@@ -177,9 +218,15 @@ export default function Layout({ children, currentPageName }) {
                 <div className="w-10 h-10 rounded-xl bg-theme-gradient flex items-center justify-center">
                   <ShoppingCart className="h-5 w-5 text-white" />
                 </div>
-                <div>
+                <div className="flex-1 min-w-0">
                   <h1 className="text-xl font-bold text-foreground">כרטיסי מזל</h1>
                   <p className="text-xs text-muted-foreground">ניהול מכירות</p>
+                  {currentKiosk && !kioskLoading && (
+                    <div className="flex items-center gap-1 mt-1">
+                      <Store className="h-3 w-3 text-muted-foreground" />
+                      <p className="text-xs text-muted-foreground truncate">{currentKiosk.name}</p>
+                    </div>
+                  )}
                 </div>
               </div>
               <Button 
@@ -191,6 +238,27 @@ export default function Layout({ children, currentPageName }) {
                 <X className="h-5 w-5" />
               </Button>
             </div>
+            
+            {/* Kiosk Selector for System Managers and Franchisees with multiple kiosks */}
+            {canSelectKiosk && allKiosks.length > 0 && (
+              <div className="mt-4">
+                <Select
+                  value={currentKiosk?.id || ''}
+                  onValueChange={(value) => selectKiosk(value)}
+                >
+                  <SelectTrigger className="w-full">
+                    <SelectValue placeholder="בחר קיוסק" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {allKiosks.map((kiosk) => (
+                      <SelectItem key={kiosk.id} value={kiosk.id}>
+                        {kiosk.name} {kiosk.location ? `- ${kiosk.location}` : ''}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
           </div>
 
           {/* Navigation */}
@@ -236,8 +304,10 @@ export default function Layout({ children, currentPageName }) {
                         {user.full_name || user.email}
                       </p>
                   <p className="text-xs text-muted-foreground">
-                    {user.position === 'owner' ? 'זכיין' : 
-                     user.role === 'admin' ? 'מנהל מערכת' : 'עוזר זכיין'}
+                    {user.role === 'system_manager' ? 'מנהל מערכת' :
+                     user.role === 'franchisee' ? 'זכיין' : 
+                     user.role === 'assistant' ? 'עוזר זכיין' :
+                     user.position === 'owner' ? 'זכיין' : 'עוזר זכיין'}
                   </p>
                     </div>
                   </div>

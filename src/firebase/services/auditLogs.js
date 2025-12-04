@@ -65,9 +65,21 @@ export const getAuditLogsByFilter = async (filters = {}) => {
 // Create new audit log
 export const createAuditLog = async (auditLogData) => {
   try {
+    // Get current user to determine kiosk_id if not provided
+    let kioskId = auditLogData.kiosk_id;
+    
+    if (!kioskId) {
+      const { getCurrentUser } = await import('./auth');
+      const currentUser = await getCurrentUser();
+      if (currentUser) {
+        kioskId = currentUser.kiosk_id;
+      }
+    }
+    
     const auditLogsRef = collection(db, COLLECTION_NAME);
     const newAuditLog = {
       ...auditLogData,
+      kiosk_id: kioskId, // Always include kiosk_id
       created_date: Timestamp.now()
     };
     const docRef = await addDoc(auditLogsRef, newAuditLog);

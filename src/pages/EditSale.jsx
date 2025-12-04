@@ -86,6 +86,7 @@ export default function EditSale() {
         target_type: "Sale",
         details: { previous: sale, updated: data },
         reason: data.reason,
+        kiosk_id: sale?.kiosk_id,
       });
     },
     onSuccess: () => {

@@ -92,3 +92,68 @@ export const checkUserLimit = async (maxUsers = 4) => {
   }
 };
 
+// Get users by kiosk ID
+export const getUsersByKiosk = async (kioskId) => {
+  try {
+    const usersRef = collection(db, COLLECTION_NAME);
+    const q = query(usersRef, where('kiosk_id', '==', kioskId));
+    const querySnapshot = await getDocs(q);
+    return querySnapshot.docs.map(doc => ({
+      id: doc.id,
+      ...doc.data()
+    }));
+  } catch (error) {
+    console.error('Error getting users by kiosk:', error);
+    throw error;
+  }
+};
+
+// Get users by role
+export const getUsersByRole = async (role) => {
+  try {
+    const usersRef = collection(db, COLLECTION_NAME);
+    const q = query(usersRef, where('role', '==', role));
+    const querySnapshot = await getDocs(q);
+    return querySnapshot.docs.map(doc => ({
+      id: doc.id,
+      ...doc.data()
+    }));
+  } catch (error) {
+    console.error('Error getting users by role:', error);
+    throw error;
+  }
+};
+
+// Helper function to check if user is system manager
+export const isSystemManager = (user) => {
+  return user?.role === 'system_manager';
+};
+
+// Helper function to check if user is franchisee
+export const isFranchisee = (user) => {
+  return user?.role === 'franchisee';
+};
+
+// Helper function to check if user is assistant
+export const isAssistant = (user) => {
+  return user?.role === 'assistant';
+};
+
+// Helper function to check if user can access a kiosk
+export const canAccessKiosk = (user, kioskId) => {
+  if (!user || !kioskId) return false;
+  
+  // System managers can access all kiosks
+  if (isSystemManager(user)) return true;
+  
+  // Check if user's kiosk_id matches
+  if (user.kiosk_id === kioskId) return true;
+  
+  // Check if kiosk_id is in user's kiosk_ids array (for franchisees with multiple kiosks)
+  if (user.kiosk_ids && Array.isArray(user.kiosk_ids) && user.kiosk_ids.includes(kioskId)) {
+    return true;
+  }
+  
+  return false;
+};
+

@@ -24,6 +24,14 @@ import AuditLog from "./AuditLog";
 
 import Settings from "./Settings";
 
+import KiosksManagement from "./KiosksManagement";
+
+import KiosksDashboard from "./KiosksDashboard";
+
+import FranchiseesManagement from "./FranchiseesManagement";
+
+import KioskDetails from "./KioskDetails";
+
 import Login from "./Login";
 
 import { BrowserRouter as Router, Route, Routes, useLocation } from 'react-router-dom';
@@ -53,6 +61,14 @@ const PAGES = {
     AuditLog: AuditLog,
     
     Settings: Settings,
+    
+    KiosksManagement: KiosksManagement,
+    
+    KiosksDashboard: KiosksDashboard,
+    
+    FranchiseesManagement: FranchiseesManagement,
+    
+    KioskDetails: KioskDetails,
     
 }
 
@@ -104,6 +120,14 @@ function PagesContent() {
                 <Route path="/AuditLog" element={<AuditLog />} />
                 
                 <Route path="/Settings" element={<Settings />} />
+                
+                <Route path="/KiosksManagement" element={<KiosksManagement />} />
+                
+                <Route path="/KiosksDashboard" element={<KiosksDashboard />} />
+                
+                <Route path="/FranchiseesManagement" element={<FranchiseesManagement />} />
+                
+                <Route path="/KioskDetails" element={<KioskDetails />} />
                 
             </Routes>
         </Layout>

@@ -1,8 +1,11 @@
 import React, { useState, useEffect } from "react";
 import { Sale, TicketType, User } from "@/api/entities";
 import { useQuery } from "@tanstack/react-query";
+import { useKiosk } from "@/contexts/KioskContext";
 import { format, subDays, startOfDay, endOfDay, startOfMonth, endOfMonth, eachDayOfInterval, subMonths } from "date-fns";
 import { he } from "date-fns/locale";
+import * as salesService from "@/firebase/services/sales";
+import * as ticketTypesService from "@/firebase/services/ticketTypes";
 import { 
   BarChart3, 
   TrendingUp, 
@@ -34,15 +37,46 @@ const COLORS = ['#6366f1', '#8b5cf6', '#a855f7', '#d946ef', '#ec4899', '#f43f5e'
 
 export default function Reports() {
   const [reportPeriod, setReportPeriod] = useState("week");
+  const { currentKiosk, isLoading: kioskLoading } = useKiosk();
+  const [user, setUser] = useState(null);
+
+  useEffect(() => {
+    const loadUser = async () => {
+      try {
+        const { auth } = await import("@/api/entities");
+        const userData = await auth.me();
+        setUser(userData);
+      } catch (e) {
+        console.log("User not logged in");
+      }
+    };
+    loadUser();
+  }, []);
 
   const { data: sales = [] } = useQuery({
-    queryKey: ['sales-all'],
-    queryFn: () => Sale.list('-created_date', 1000),
+    queryKey: ['sales-reports', currentKiosk?.id],
+    queryFn: () => {
+      if (currentKiosk?.id) {
+        return salesService.getSalesByKiosk(currentKiosk.id, 1000);
+      } else if (user?.role === 'system_manager') {
+        return salesService.getAllSales(1000);
+      }
+      return [];
+    },
+    enabled: !kioskLoading && (!!currentKiosk || user?.role === 'system_manager'),
   });
 
   const { data: tickets = [] } = useQuery({
-    queryKey: ['tickets-all'],
-    queryFn: () => TicketType.list(),
+    queryKey: ['tickets-reports', currentKiosk?.id],
+    queryFn: () => {
+      if (currentKiosk?.id) {
+        return ticketTypesService.getTicketTypesByKiosk(currentKiosk.id);
+      } else if (user?.role === 'system_manager') {
+        return ticketTypesService.getAllTicketTypes();
+      }
+      return [];
+    },
+    enabled: !kioskLoading && (!!currentKiosk || user?.role === 'system_manager'),
   });
 
   const { data: users = [] } = useQuery({

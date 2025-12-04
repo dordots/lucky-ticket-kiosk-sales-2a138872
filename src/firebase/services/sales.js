@@ -16,14 +16,21 @@ import { db } from '../config';
 
 const COLLECTION_NAME = 'sales';
 
-// Get all sales
-export const getAllSales = async (limitCount = null) => {
+// Get all sales (optionally filtered by kiosk_id)
+export const getAllSales = async (limitCount = null, kioskId = null) => {
   try {
     const salesRef = collection(db, COLLECTION_NAME);
-    let q = query(salesRef, orderBy('created_date', 'desc'));
+    let q = query(salesRef);
+    
+    // Filter by kiosk_id if provided
+    if (kioskId) {
+      q = query(q, where('kiosk_id', '==', kioskId));
+    }
+    
+    q = query(q, orderBy('created_date', 'desc'));
     
     if (limitCount) {
-      q = query(salesRef, orderBy('created_date', 'desc'), limit(limitCount));
+      q = query(q, limit(limitCount));
     }
     
     const querySnapshot = await getDocs(q);
@@ -63,6 +70,16 @@ export const getSalesByFilter = async (filters = {}) => {
   }
 };
 
+// Get sales by kiosk ID
+export const getSalesByKiosk = async (kioskId, limitCount = null) => {
+  try {
+    return await getAllSales(limitCount, kioskId);
+  } catch (error) {
+    console.error('Error getting sales by kiosk:', error);
+    throw error;
+  }
+};
+
 // Get single sale by ID
 export const getSaleById = async (saleId) => {
   try {
@@ -86,9 +103,25 @@ export const getSaleById = async (saleId) => {
 // Create new sale
 export const createSale = async (saleData) => {
   try {
+    // Get current user to determine kiosk_id if not provided
+    let kioskId = saleData.kiosk_id;
+    
+    if (!kioskId) {
+      const { getCurrentUser } = await import('./auth');
+      const currentUser = await getCurrentUser();
+      if (currentUser) {
+        kioskId = currentUser.kiosk_id;
+      }
+    }
+    
+    if (!kioskId) {
+      throw new Error('kiosk_id is required for creating a sale');
+    }
+    
     const salesRef = collection(db, COLLECTION_NAME);
     const newSale = {
       ...saleData,
+      kiosk_id: kioskId,
       created_date: Timestamp.now(),
       updated_date: Timestamp.now()
     };

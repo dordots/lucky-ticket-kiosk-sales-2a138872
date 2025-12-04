@@ -58,6 +58,7 @@ export default function DeleteSale() {
         target_type: "Sale",
         details: sale,
         reason: reason,
+        kiosk_id: sale?.kiosk_id,
       });
 
       // Restore inventory

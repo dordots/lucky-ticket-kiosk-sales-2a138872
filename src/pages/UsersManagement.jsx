@@ -3,6 +3,8 @@ import { User, auth } from "@/api/entities";
 import { firebase } from "@/api/firebaseClient";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import * as usersService from "@/firebase/services/users";
+import * as kiosksService from "@/firebase/services/kiosks";
+import { useKiosk } from "@/contexts/KioskContext";
 import { motion, AnimatePresence } from "framer-motion";
 import { 
   Plus, 
@@ -48,19 +50,28 @@ import {
 } from "@/components/ui/alert-dialog";
 // Toast removed
 
+const roleLabels = {
+  system_manager: "מנהל מערכת",
+  franchisee: "זכיין",
+  assistant: "עוזר זכיין",
+};
+
+const roleIcons = {
+  system_manager: ShieldAlert,
+  franchisee: ShieldAlert,
+  assistant: Shield,
+};
+
+const roleColors = {
+  system_manager: "bg-red-100 text-red-700",
+  franchisee: "bg-purple-100 text-purple-700",
+  assistant: "bg-accent text-foreground",
+};
+
+// Keep old position labels for backward compatibility
 const positionLabels = {
   owner: "זכיין",
   seller: "עוזר זכיין",
-};
-
-const positionIcons = {
-  owner: ShieldAlert,
-  seller: Shield,
-};
-
-const positionColors = {
-  owner: "bg-purple-100 text-purple-700",
-  seller: "bg-accent text-foreground",
 };
 
 export default function UsersManagement() {
@@ -71,29 +82,74 @@ export default function UsersManagement() {
   const [userLimitDialogOpen, setUserLimitDialogOpen] = useState(false);
   const [userLimitInfo, setUserLimitInfo] = useState(null);
   const [selectedUser, setSelectedUser] = useState(null);
+  const [currentUser, setCurrentUser] = useState(null);
+  const { currentKiosk } = useKiosk();
   const [formData, setFormData] = useState({
     email: "",
     full_name: "",
     password: "",
-    position: "seller", // Only 'owner' or 'seller'
+    role: "assistant", // 'system_manager', 'franchisee', 'assistant'
+    kiosk_id: "",
     is_active: true,
     phone: "",
   });
 
   const queryClient = useQueryClient();
 
-  const { data: users = [], isLoading } = useQuery({
+  // Get current user
+  useEffect(() => {
+    auth.me().then(setCurrentUser).catch(console.error);
+  }, []);
+
+  // Get available kiosks for selection
+  const { data: availableKiosks = [] } = useQuery({
+    queryKey: ['kiosks-for-user-creation'],
+    queryFn: async () => {
+      if (currentUser?.role === 'system_manager') {
+        return await kiosksService.getAllKiosks();
+      } else if (currentUser?.role === 'franchisee' && currentKiosk) {
+        return [currentKiosk];
+      }
+      return [];
+    },
+    enabled: !!currentUser && (currentUser.role === 'system_manager' || (currentUser.role === 'franchisee' && !!currentKiosk)),
+  });
+
+  const { data: allUsers = [], isLoading } = useQuery({
     queryKey: ['users-all'],
     queryFn: () => User.list(),
   });
 
+  // Filter users based on current user's role
+  const users = React.useMemo(() => {
+    if (!currentUser) return [];
+    if (currentUser.role === 'system_manager') {
+      return allUsers; // System managers see all users
+    } else if (currentUser.role === 'franchisee' && currentKiosk) {
+      // Franchisees see only users from their kiosk
+      return allUsers.filter(u => u.kiosk_id === currentKiosk.id);
+    }
+    return []; // Assistants can't see users management
+  }, [allUsers, currentUser, currentKiosk]);
+
   const createMutation = useMutation({
     mutationFn: async (data) => {
+      // Determine role and position
+      let role = data.role;
+      let position = data.role === 'franchisee' ? 'owner' : 'seller';
+      let kioskId = data.kiosk_id || null;
+      
+      // If franchisee is creating, use their kiosk
+      if (currentUser?.role === 'franchisee' && currentKiosk && !kioskId) {
+        kioskId = currentKiosk.id;
+      }
+      
       // Create user in Firebase Authentication and Firestore
-      // Uses REST API so the admin stays logged in
       await firebase.auth.createUser(data.email, data.password, {
         full_name: data.full_name,
-        position: data.position,
+        role: role,
+        position: position,
+        kiosk_id: kioskId,
         phone: data.phone,
         is_active: data.is_active,
       });
@@ -120,11 +176,18 @@ export default function UsersManagement() {
   });
 
   const resetForm = () => {
+    // Default role based on current user
+    let defaultRole = "assistant";
+    if (currentUser?.role === 'system_manager') {
+      defaultRole = "franchisee"; // System managers can create franchisees
+    }
+    
     setFormData({
       email: "",
       full_name: "",
       password: "",
-      position: "seller",
+      role: defaultRole,
+      kiosk_id: currentKiosk?.id || "",
       is_active: true,
       phone: "",
     });
@@ -137,7 +200,8 @@ export default function UsersManagement() {
       email: user.email || "",
       full_name: user.full_name || "",
       password: "", // Don't show password when editing
-      position: user.position || "seller",
+      role: user.role || (user.position === 'owner' ? 'franchisee' : 'assistant'),
+      kiosk_id: user.kiosk_id || "",
       is_active: user.is_active !== false,
       phone: user.phone || "",
     });
@@ -147,14 +211,24 @@ export default function UsersManagement() {
   const handleSubmit = async () => {
     if (selectedUser) {
       // Update existing user
+      const updateData = {
+        is_active: formData.is_active,
+        phone: formData.phone,
+        full_name: formData.full_name,
+      };
+      
+      // Only system managers can change role and kiosk
+      if (currentUser?.role === 'system_manager') {
+        updateData.role = formData.role;
+        updateData.position = formData.role === 'franchisee' ? 'owner' : 'seller';
+        if (formData.kiosk_id) {
+          updateData.kiosk_id = formData.kiosk_id;
+        }
+      }
+      
       await updateMutation.mutateAsync({ 
         id: selectedUser.id, 
-        data: {
-          position: formData.position,
-          is_active: formData.is_active,
-          phone: formData.phone,
-          full_name: formData.full_name,
-        }
+        data: updateData
       });
     } else {
       // Create new user - check user limit first
@@ -163,20 +237,29 @@ export default function UsersManagement() {
         return;
       }
       
+      // Validate kiosk selection
+      if (formData.role === 'assistant' && !formData.kiosk_id) {
+        alert('נא לבחור קיוסק לעוזר');
+        return;
+      }
+      
       try {
-        // Check user limit before creating
-        const limitCheck = await usersService.checkUserLimit(4);
-        if (limitCheck.isLimitReached) {
-          setUserLimitInfo(limitCheck);
-          setUserLimitDialogOpen(true);
-          return;
+        // Check user limit before creating (only for assistants)
+        if (formData.role === 'assistant') {
+          const limitCheck = await usersService.checkUserLimit(4);
+          if (limitCheck.isLimitReached) {
+            setUserLimitInfo(limitCheck);
+            setUserLimitDialogOpen(true);
+            return;
+          }
         }
         
         await createMutation.mutateAsync({
           email: formData.email,
           password: formData.password,
           full_name: formData.full_name,
-          position: formData.position,
+          role: formData.role,
+          kiosk_id: formData.kiosk_id,
           phone: formData.phone,
           is_active: formData.is_active,
         });
@@ -203,29 +286,39 @@ export default function UsersManagement() {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-foreground">ניהול משתמשים</h1>
-          <p className="text-muted-foreground">ניהול זכיינים ועוזרי זכיין</p>
+          <p className="text-muted-foreground">
+            {currentUser?.role === 'system_manager' 
+              ? 'ניהול זכיינים ועוזרי זכיין' 
+              : currentUser?.role === 'franchisee'
+              ? 'ניהול עוזרי זכיין בקיוסק שלך'
+              : 'ניהול משתמשים'}
+          </p>
         </div>
-        <Button 
-          onClick={async () => {
-            resetForm();
-            // Check user limit before opening dialog
-            try {
-              const limitCheck = await usersService.checkUserLimit(4);
-              if (limitCheck.isLimitReached) {
-                setUserLimitInfo(limitCheck);
-                setUserLimitDialogOpen(true);
-                return;
+        {(currentUser?.role === 'system_manager' || currentUser?.role === 'franchisee') && (
+          <Button 
+            onClick={async () => {
+              resetForm();
+              // Check user limit before opening dialog (only for assistants)
+              if (formData.role === 'assistant' || (!currentUser?.role === 'system_manager' && currentUser?.role === 'franchisee')) {
+                try {
+                  const limitCheck = await usersService.checkUserLimit(4);
+                  if (limitCheck.isLimitReached) {
+                    setUserLimitInfo(limitCheck);
+                    setUserLimitDialogOpen(true);
+                    return;
+                  }
+                } catch (error) {
+                  console.error('Error checking user limit:', error);
+                }
               }
-            } catch (error) {
-              console.error('Error checking user limit:', error);
-            }
-            setDialogOpen(true);
-          }}
-          className="bg-theme-gradient"
-        >
-          <Plus className="h-4 w-4 ml-2" />
-          הוסף משתמש חדש
-        </Button>
+              setDialogOpen(true);
+            }}
+            className="bg-theme-gradient"
+          >
+            <Plus className="h-4 w-4 ml-2" />
+            הוסף משתמש חדש
+          </Button>
+        )}
       </div>
 
       {/* Search */}
@@ -243,7 +336,8 @@ export default function UsersManagement() {
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
         <AnimatePresence>
           {filteredUsers.map((user, index) => {
-            const PositionIcon = positionIcons[user.position] || Shield;
+            const userRole = user.role || (user.position === 'owner' ? 'franchisee' : 'assistant');
+            const RoleIcon = roleIcons[userRole] || Shield;
             const isActive = user.is_active !== false;
             
             return (
@@ -265,15 +359,17 @@ export default function UsersManagement() {
                           <h3 className="font-bold text-foreground">
                             {user.full_name || 'ללא שם'}
                           </h3>
-                          <Badge className={positionColors[user.position] || positionColors.seller}>
-                            <PositionIcon className="h-3 w-3 ml-1" />
-                            {positionLabels[user.position] || 'עוזר זכיין'}
+                          <Badge className={roleColors[userRole] || roleColors.assistant}>
+                            <RoleIcon className="h-3 w-3 ml-1" />
+                            {roleLabels[userRole] || 'עוזר זכיין'}
                           </Badge>
                         </div>
                       </div>
-                      <Button variant="ghost" size="icon" onClick={() => handleEdit(user)}>
-                        <Edit className="h-4 w-4 text-muted-foreground" />
-                      </Button>
+                      {(currentUser?.role === 'system_manager' || currentUser?.role === 'franchisee') && (
+                        <Button variant="ghost" size="icon" onClick={() => handleEdit(user)}>
+                          <Edit className="h-4 w-4 text-muted-foreground" />
+                        </Button>
+                      )}
                     </div>
 
                     <div className="space-y-2 text-sm">
@@ -397,31 +493,63 @@ export default function UsersManagement() {
               </>
             )}
 
-              <div className="space-y-2">
-                <Label>תפקיד</Label>
-                <Select
-                  value={formData.position}
-                  onValueChange={(value) => setFormData({ ...formData, position: value })}
-                >
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="owner">
-                      <div className="flex items-center gap-2">
-                        <ShieldAlert className="h-4 w-4" />
-                        <span>זכיין</span>
-                      </div>
-                    </SelectItem>
-                    <SelectItem value="seller">
-                      <div className="flex items-center gap-2">
-                        <Shield className="h-4 w-4" />
-                        <span>עוזר זכיין</span>
-                      </div>
-                    </SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
+              {/* Role selection - only for system managers */}
+              {currentUser?.role === 'system_manager' && (
+                <div className="space-y-2">
+                  <Label>תפקיד</Label>
+                  <Select
+                    value={formData.role}
+                    onValueChange={(value) => {
+                      setFormData({ 
+                        ...formData, 
+                        role: value,
+                        kiosk_id: value === 'assistant' ? formData.kiosk_id : '' // Clear kiosk if not assistant
+                      });
+                    }}
+                    disabled={!!selectedUser}
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="franchisee">
+                        <div className="flex items-center gap-2">
+                          <ShieldAlert className="h-4 w-4" />
+                          <span>זכיין</span>
+                        </div>
+                      </SelectItem>
+                      <SelectItem value="assistant">
+                        <div className="flex items-center gap-2">
+                          <Shield className="h-4 w-4" />
+                          <span>עוזר זכיין</span>
+                        </div>
+                      </SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
+
+              {/* Kiosk selection - for assistants or when editing */}
+              {(formData.role === 'assistant' || selectedUser?.role === 'assistant') && availableKiosks.length > 0 && (
+                <div className="space-y-2">
+                  <Label>קיוסק *</Label>
+                  <Select
+                    value={formData.kiosk_id}
+                    onValueChange={(value) => setFormData({ ...formData, kiosk_id: value })}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="בחר קיוסק" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {availableKiosks.map((kiosk) => (
+                        <SelectItem key={kiosk.id} value={kiosk.id}>
+                          {kiosk.name} {kiosk.location ? `- ${kiosk.location}` : ''}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
 
               <div className="space-y-2">
                 <Label>טלפון</Label>

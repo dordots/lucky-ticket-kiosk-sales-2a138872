@@ -65,10 +65,26 @@ export const setCurrentUser = (userId) => {
 // Sign in with email and password
 export const signIn = async (email, password) => {
   try {
+    // Clear any old user data
+    localStorage.removeItem('currentUserId');
+    localStorage.removeItem('selectedKioskId');
+    
     const userCredential = await signInWithEmailAndPassword(auth, email, password);
+    console.log("Sign in successful, UID:", userCredential.user.uid); // Debug log
+    
+    // Wait a bit for auth state to update
+    await new Promise(resolve => setTimeout(resolve, 100));
+    
+    // Get user data from Firestore
+    const userData = await getCurrentUser();
+    console.log("User data loaded:", userData); // Debug log
+    
     // Store user ID in localStorage for compatibility
-    localStorage.setItem('currentUserId', userCredential.user.uid);
-    return await getCurrentUser();
+    if (userData) {
+      localStorage.setItem('currentUserId', userData.uid || userData.id);
+    }
+    
+    return userData;
   } catch (error) {
     console.error('Error signing in:', error);
     throw error;
@@ -118,11 +134,38 @@ export const createUser = async (email, password, userData) => {
     const result = await response.json();
     const uid = result.localId; // Firebase returns localId instead of uid in REST API
     
+    // Determine role and position based on userData
+    // role: system_manager, franchisee, assistant
+    // position: owner (for franchisee), seller (for assistant) - kept for backward compatibility
+    let role = userData.role || 'assistant';
+    let position = userData.position;
+    
+    // If role is not provided, infer from position
+    if (!userData.role) {
+      if (userData.position === 'owner') {
+        role = 'franchisee';
+        position = 'owner';
+      } else {
+        role = 'assistant';
+        position = 'seller';
+      }
+    } else {
+      // If role is provided, set position accordingly
+      if (role === 'franchisee') {
+        position = 'owner';
+      } else if (role === 'assistant') {
+        position = 'seller';
+      }
+    }
+    
     // Create user document in Firestore
     await setDoc(doc(db, 'users', uid), {
       email,
       full_name: userData.full_name || '',
-      position: userData.position || 'seller',
+      role: role,
+      position: position,
+      kiosk_id: userData.kiosk_id || null,
+      kiosk_ids: userData.kiosk_ids || (role === 'franchisee' && userData.kiosk_id ? [userData.kiosk_id] : []),
       phone: userData.phone || '',
       is_active: userData.is_active !== false,
       created_date: Timestamp.now()
@@ -235,6 +278,36 @@ export const getAuthInstance = () => {
   return getAuth();
 };
 
+// Helper functions for role checking
+export const isSystemManager = (user) => {
+  return user?.role === 'system_manager';
+};
+
+export const isFranchisee = (user) => {
+  return user?.role === 'franchisee';
+};
+
+export const isAssistant = (user) => {
+  return user?.role === 'assistant';
+};
+
+export const canAccessKiosk = (user, kioskId) => {
+  if (!user || !kioskId) return false;
+  
+  // System managers can access all kiosks
+  if (isSystemManager(user)) return true;
+  
+  // Check if user's kiosk_id matches
+  if (user.kiosk_id === kioskId) return true;
+  
+  // Check if kiosk_id is in user's kiosk_ids array (for franchisees with multiple kiosks)
+  if (user.kiosk_ids && Array.isArray(user.kiosk_ids) && user.kiosk_ids.includes(kioskId)) {
+    return true;
+  }
+  
+  return false;
+};
+
 // Sign in with Google
 export const signInWithGoogle = async () => {
   try {
@@ -242,29 +315,23 @@ export const signInWithGoogle = async () => {
     const userCredential = await signInWithPopup(auth, provider);
     const user = userCredential.user;
     
-    // Store user ID in localStorage for compatibility
-    localStorage.setItem('currentUserId', user.uid);
-    
     // Check if user exists in Firestore
     const userDoc = await getDoc(doc(db, 'users', user.uid));
     
     if (!userDoc.exists()) {
-      // Create user document in Firestore if it doesn't exist (first time login)
-      const displayName = user.displayName || '';
-      const nameParts = displayName.split(' ');
-      const firstName = nameParts[0] || '';
-      const lastName = nameParts.slice(1).join(' ') || '';
+      // User doesn't exist in Firestore - sign them out and throw error
+      await signOut(auth);
+      localStorage.removeItem('currentUserId');
+      localStorage.removeItem('selectedKioskId');
       
-      await setDoc(doc(db, 'users', user.uid), {
-        email: user.email,
-        full_name: displayName || user.email?.split('@')[0] || 'משתמש',
-        position: 'seller', // Default to seller, can be changed by owner
-        phone: user.phoneNumber || '',
-        is_active: true,
-        created_date: Timestamp.now(),
-        auth_provider: 'google' // Track that user signed in with Google
-      });
+      const error = new Error('USER_NOT_IN_SYSTEM');
+      error.code = 'USER_NOT_IN_SYSTEM';
+      error.message = 'המשתמש לא משויך לקיוסק. אנא פנה למנהל המערכת.';
+      throw error;
     }
+    
+    // Store user ID in localStorage for compatibility
+    localStorage.setItem('currentUserId', user.uid);
     
     return await getCurrentUser();
   } catch (error) {

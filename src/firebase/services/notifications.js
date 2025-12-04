@@ -42,22 +42,61 @@ export const getAllNotifications = async (orderByField = 'created_date', limitCo
 // Get notifications by filter
 export const getNotificationsByFilter = async (filters = {}) => {
   try {
-    const notificationsRef = collection(db, COLLECTION_NAME);
-    let q = query(notificationsRef);
+    // Get current user to filter by user_id (required by Firebase Rules)
+    const { getCurrentUser } = await import('./auth');
+    const currentUser = await getCurrentUser();
     
-    // Apply filters
-    Object.keys(filters).forEach(key => {
-      q = query(q, where(key, '==', filters[key]));
+    if (!currentUser) {
+      return [];
+    }
+    
+    const notificationsRef = collection(db, COLLECTION_NAME);
+    
+    // Always filter by user_id first (required by Firebase Rules)
+    let q = query(notificationsRef, where('user_id', '==', currentUser.uid));
+    
+    // Apply additional filters (but avoid composite index issues)
+    // If is_read filter is provided, we'll filter in memory to avoid index requirement
+    const needsIsReadFilter = filters.is_read !== undefined;
+    const otherFilters = { ...filters };
+    if (needsIsReadFilter) {
+      delete otherFilters.is_read;
+    }
+    
+    // Apply other filters
+    Object.keys(otherFilters).forEach(key => {
+      if (key !== 'user_id') {
+        q = query(q, where(key, '==', otherFilters[key]));
+      }
     });
     
-    q = query(q, orderBy('created_date', 'desc'));
+    // Only order by created_date if we don't need is_read filter (to avoid composite index)
+    if (!needsIsReadFilter) {
+      q = query(q, orderBy('created_date', 'desc'));
+    }
     
     const querySnapshot = await getDocs(q);
-    return querySnapshot.docs.map(doc => ({
+    let results = querySnapshot.docs.map(doc => ({
       id: doc.id,
       ...doc.data(),
       created_date: doc.data().created_date?.toDate?.()?.toISOString() || doc.data().created_date
     }));
+    
+    // Filter by is_read in memory if needed
+    if (needsIsReadFilter) {
+      results = results.filter(n => n.is_read === filters.is_read);
+    }
+    
+    // Sort by created_date if we filtered in memory
+    if (needsIsReadFilter) {
+      results.sort((a, b) => {
+        const dateA = new Date(a.created_date || 0);
+        const dateB = new Date(b.created_date || 0);
+        return dateB - dateA;
+      });
+    }
+    
+    return results;
   } catch (error) {
     console.error('Error filtering notifications:', error);
     throw error;

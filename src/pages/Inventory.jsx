@@ -2,6 +2,8 @@ import React, { useState, useEffect } from "react";
 import { auth, TicketType, AuditLog, Notification } from "@/api/entities";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { generateUniqueCode } from "@/firebase/services/ticketTypes";
+import { useKiosk } from "@/contexts/KioskContext";
+import * as ticketTypesService from "@/firebase/services/ticketTypes";
 import { motion, AnimatePresence } from "framer-motion";
 import { 
   Plus, 
@@ -65,6 +67,7 @@ export default function Inventory() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [selectedTicket, setSelectedTicket] = useState(null);
+  const { currentKiosk, isLoading: kioskLoading } = useKiosk();
   const [formData, setFormData] = useState({
     name: "",
     nickname: "",
@@ -102,14 +105,30 @@ export default function Inventory() {
   }, []);
 
   const { data: tickets = [], isLoading } = useQuery({
-    queryKey: ['tickets-all'],
-    queryFn: () => TicketType.list(),
+    queryKey: ['tickets-inventory', currentKiosk?.id],
+    queryFn: async () => {
+      if (!currentKiosk?.id) {
+        console.warn('Inventory: No currentKiosk available');
+        return [];
+      }
+      try {
+        const result = await ticketTypesService.getTicketTypesByKiosk(currentKiosk.id);
+        console.log('Inventory: Loaded tickets:', result.length, 'for kiosk:', currentKiosk.id);
+        return result;
+      } catch (error) {
+        console.error('Inventory: Error loading tickets:', error);
+        return [];
+      }
+    },
+    enabled: !kioskLoading && !!currentKiosk?.id,
   });
 
   const createMutation = useMutation({
     mutationFn: (data) => TicketType.create(data),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['tickets-all'] });
+      queryClient.invalidateQueries({ queryKey: ['tickets-inventory', currentKiosk?.id] });
+      queryClient.invalidateQueries({ queryKey: ['tickets-dashboard', currentKiosk?.id] });
+      queryClient.invalidateQueries({ queryKey: ['tickets-active'] });
       setDialogOpen(false);
       resetForm();
       // Toast notification removed
@@ -119,7 +138,9 @@ export default function Inventory() {
   const updateMutation = useMutation({
     mutationFn: ({ id, data }) => TicketType.update(id, data),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['tickets-all'] });
+      queryClient.invalidateQueries({ queryKey: ['tickets-inventory', currentKiosk?.id] });
+      queryClient.invalidateQueries({ queryKey: ['tickets-dashboard', currentKiosk?.id] });
+      queryClient.invalidateQueries({ queryKey: ['tickets-active'] });
       setDialogOpen(false);
       resetForm();
       // Toast notification removed
@@ -129,7 +150,9 @@ export default function Inventory() {
   const deleteMutation = useMutation({
     mutationFn: (id) => TicketType.delete(id),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['tickets-all'] });
+      queryClient.invalidateQueries({ queryKey: ['tickets-inventory', currentKiosk?.id] });
+      queryClient.invalidateQueries({ queryKey: ['tickets-dashboard', currentKiosk?.id] });
+      queryClient.invalidateQueries({ queryKey: ['tickets-active'] });
       setDeleteDialogOpen(false);
       setSelectedTicket(null);
       // Toast notification removed
@@ -184,7 +207,7 @@ export default function Inventory() {
     if (!selectedTicket) {
       // New ticket - generate unique code
       try {
-        code = await generateUniqueCode(formData.ticket_category || "custom");
+        code = await generateUniqueCode(formData.ticket_category || "custom", currentKiosk?.id);
       } catch (error) {
         console.error("Error generating code:", error);
         alert("שגיאה ביצירת קוד. נסה שוב.");
@@ -195,6 +218,11 @@ export default function Inventory() {
       code = selectedTicket.code || formData.code;
     }
 
+    if (!currentKiosk?.id) {
+      alert('לא ניתן ליצור כרטיס ללא קיוסק נבחר');
+      return;
+    }
+
     const data = {
       name: formData.name,
       nickname: formData.nickname || null, // Store null if empty
@@ -203,10 +231,11 @@ export default function Inventory() {
       quantity: parseInt(formData.quantity) || 0,
       default_quantity_per_package: formData.default_quantity_per_package ? parseInt(formData.default_quantity_per_package) : null,
       min_threshold: parseInt(formData.min_threshold) || 10,
-        color: formData.use_image ? null : formData.color,
-        image_url: formData.use_image ? formData.image_url : null,
-        is_active: formData.is_active,
-        ticket_category: formData.ticket_category || "custom",
+      color: formData.use_image ? null : formData.color,
+      image_url: formData.use_image ? formData.image_url : null,
+      is_active: formData.is_active,
+      ticket_category: formData.ticket_category || "custom",
+      kiosk_id: currentKiosk.id,
     };
 
     if (selectedTicket) {
@@ -286,6 +315,7 @@ export default function Inventory() {
           target_id: selectedTicket.id,
           target_type: "TicketType",
           details: { previous: selectedTicket, updated: data },
+          kiosk_id: currentKiosk?.id,
         });
       } catch (auditError) {
         console.error("Error creating audit log:", auditError);
@@ -301,6 +331,7 @@ export default function Inventory() {
           actor_name: user?.full_name || user?.email,
           target_type: "TicketType",
           details: data,
+          kiosk_id: currentKiosk?.id,
         });
       } catch (auditError) {
         console.error("Error creating audit log:", auditError);
@@ -318,6 +349,7 @@ export default function Inventory() {
         target_id: selectedTicket.id,
         target_type: "TicketType",
         details: selectedTicket,
+        kiosk_id: currentKiosk?.id,
       });
       
       await deleteMutation.mutateAsync(selectedTicket.id);

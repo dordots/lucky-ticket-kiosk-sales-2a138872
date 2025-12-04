@@ -24,6 +24,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { useKiosk } from "@/contexts/KioskContext";
 
 const actionConfig = {
   create_sale: { label: "יצירת עסקה", icon: ShoppingCart, color: "bg-green-100 text-green-700" },
@@ -190,10 +191,17 @@ const formatDetails = (details, actionType = null) => {
 export default function AuditLog() {
   const [expandedLogs, setExpandedLogs] = useState({});
   const [selectedLog, setSelectedLog] = useState(null);
+  const { currentKiosk } = useKiosk();
 
   const { data: logs = [], isLoading } = useQuery({
-    queryKey: ['audit-logs-all'],
-    queryFn: () => AuditLogService.list('-created_date', 100),
+    queryKey: ['audit-logs', currentKiosk?.id],
+    queryFn: async () => {
+      if (!currentKiosk?.id) {
+        return [];
+      }
+      return AuditLogService.filter({ kiosk_id: currentKiosk.id });
+    },
+    enabled: !!currentKiosk?.id,
   });
 
   const toggleExpand = (logId) => {
@@ -212,7 +220,11 @@ export default function AuditLog() {
       {/* Header */}
       <div>
         <h1 className="text-2xl font-bold text-foreground">יומן פעולות</h1>
-        <p className="text-muted-foreground">היסטוריית כל הפעולות במערכת</p>
+        <p className="text-muted-foreground">
+          {currentKiosk 
+            ? `היסטוריית הפעולות של קיוסק: ${currentKiosk.name}`
+            : 'היסטוריית הפעולות במערכת'}
+        </p>
       </div>
 
       <Card>

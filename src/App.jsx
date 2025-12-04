@@ -2,6 +2,7 @@ import './App.css'
 import { useEffect } from 'react'
 import Pages from "@/pages/index.jsx"
 import { Toaster } from "@/components/ui/toaster"
+import { KioskProvider } from "@/contexts/KioskContext"
 
 const colorThemes = {
   indigo: { 
@@ -96,8 +97,10 @@ function App() {
 
   return (
     <>
-      <Pages />
-      <Toaster />
+      <KioskProvider>
+        <Pages />
+        <Toaster />
+      </KioskProvider>
     </>
   )
 }

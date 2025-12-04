@@ -15,9 +15,22 @@ import { db } from '../config';
 const COLLECTION_NAME = 'ticketTypes';
 
 // Generate unique code for ticket
-export const generateUniqueCode = async (category = 'custom') => {
+export const generateUniqueCode = async (category = 'custom', kioskId = null) => {
   const maxAttempts = 10;
   let attempts = 0;
+  
+  // Get current user's kiosk_id if not provided
+  if (!kioskId) {
+    try {
+      const { getCurrentUser } = await import('./auth');
+      const currentUser = await getCurrentUser();
+      if (currentUser) {
+        kioskId = currentUser.kiosk_id;
+      }
+    } catch (error) {
+      console.error('Error getting current user for code generation:', error);
+    }
+  }
   
   while (attempts < maxAttempts) {
     // Generate code based on category
@@ -30,10 +43,16 @@ export const generateUniqueCode = async (category = 'custom') => {
       code = 'CUST-' + Math.random().toString(36).substring(2, 7).toUpperCase();
     }
     
-    // Check if code already exists
+    // Check if code already exists (only in the same kiosk)
     try {
       const ticketTypesRef = collection(db, COLLECTION_NAME);
-      const codeQuery = query(ticketTypesRef, where('code', '==', code));
+      let codeQuery = query(ticketTypesRef, where('code', '==', code));
+      
+      // If kioskId is provided, filter by it (for permissions)
+      if (kioskId) {
+        codeQuery = query(codeQuery, where('kiosk_id', '==', kioskId));
+      }
+      
       const codeSnapshot = await getDocs(codeQuery);
       
       if (codeSnapshot.empty) {
@@ -55,11 +74,18 @@ export const generateUniqueCode = async (category = 'custom') => {
   return category === 'pais' ? `PAIS-${timestamp}` : `CUST-${timestamp}`;
 };
 
-// Get all ticket types
-export const getAllTicketTypes = async () => {
+// Get all ticket types (optionally filtered by kiosk_id)
+export const getAllTicketTypes = async (kioskId = null) => {
   try {
     const ticketTypesRef = collection(db, COLLECTION_NAME);
-    const querySnapshot = await getDocs(ticketTypesRef);
+    let q = query(ticketTypesRef);
+    
+    // Filter by kiosk_id if provided
+    if (kioskId) {
+      q = query(q, where('kiosk_id', '==', kioskId));
+    }
+    
+    const querySnapshot = await getDocs(q);
     return querySnapshot.docs.map(doc => ({
       id: doc.id,
       ...doc.data()
@@ -92,6 +118,16 @@ export const getTicketTypesByFilter = async (filters = {}) => {
   }
 };
 
+// Get ticket types by kiosk ID
+export const getTicketTypesByKiosk = async (kioskId) => {
+  try {
+    return await getAllTicketTypes(kioskId);
+  } catch (error) {
+    console.error('Error getting ticket types by kiosk:', error);
+    throw error;
+  }
+};
+
 // Get single ticket type by ID
 export const getTicketTypeById = async (ticketTypeId) => {
   try {
@@ -114,9 +150,25 @@ export const getTicketTypeById = async (ticketTypeId) => {
 // Create new ticket type
 export const createTicketType = async (ticketTypeData) => {
   try {
+    // Get current user to determine kiosk_id if not provided
+    let kioskId = ticketTypeData.kiosk_id;
+    
+    if (!kioskId) {
+      const { getCurrentUser } = await import('./auth');
+      const currentUser = await getCurrentUser();
+      if (currentUser) {
+        kioskId = currentUser.kiosk_id;
+      }
+    }
+    
+    if (!kioskId) {
+      throw new Error('kiosk_id is required for creating a ticket type');
+    }
+    
     const ticketTypesRef = collection(db, COLLECTION_NAME);
     const newTicketType = {
       ...ticketTypeData,
+      kiosk_id: kioskId,
       created_date: Timestamp.now(),
       updated_date: Timestamp.now()
     };

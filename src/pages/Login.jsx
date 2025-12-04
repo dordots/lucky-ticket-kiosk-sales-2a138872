@@ -22,14 +22,21 @@ export default function Login() {
     setIsLoading(true);
 
     try {
-      await auth.login(email, password);
+      const userData = await auth.login(email, password);
+      console.log("Logged in user:", userData); // Debug log
+      // Clear any old localStorage data
+      localStorage.removeItem('currentUserId');
+      localStorage.removeItem('selectedKioskId');
       // Redirect to home page after successful login
       navigate("/");
-      window.location.reload(); // Reload to update user state
+      // Small delay before reload to ensure state is updated
+      setTimeout(() => {
+        window.location.reload();
+      }, 100);
     } catch (err) {
       console.error("Login error:", err);
-      if (err.code === "auth/user-not-found") {
-        setError("משתמש לא נמצא");
+      if (err.code === "auth/user-not-found" || err.code === "auth/invalid-credential") {
+        setError("משתמש לא נמצא או סיסמה שגויה. ודא שהרצת את ה-seed script.");
       } else if (err.code === "auth/wrong-password") {
         setError("סיסמה שגויה");
       } else if (err.code === "auth/invalid-email") {
@@ -53,7 +60,9 @@ export default function Login() {
       window.location.reload(); // Reload to update user state
     } catch (err) {
       console.error("Google sign-in error:", err);
-      if (err.code === "auth/popup-closed-by-user") {
+      if (err.code === "USER_NOT_IN_SYSTEM" || err.message === "USER_NOT_IN_SYSTEM") {
+        setError("המשתמש לא משויך לקיוסק. אנא פנה למנהל המערכת כדי להוסיף אותך למערכת.");
+      } else if (err.code === "auth/popup-closed-by-user") {
         setError("התהליך בוטל על ידי המשתמש");
       } else if (err.code === "auth/popup-blocked") {
         setError("חלון ההתחברות נחסם. אנא אפשר חלונות קופצים בדפדפן.");

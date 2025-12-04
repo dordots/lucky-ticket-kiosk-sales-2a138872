@@ -3,8 +3,10 @@ import { auth, Sale } from "@/api/entities";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
 import { createPageUrl } from "@/utils";
+import { useKiosk } from "@/contexts/KioskContext";
 import { format, subDays, startOfDay, endOfDay } from "date-fns";
 import { he } from "date-fns/locale";
+import * as salesService from "@/firebase/services/sales";
 import { 
   Search, 
   Filter, 
@@ -71,6 +73,7 @@ export default function SalesHistory() {
     to: new Date(),
   });
   const [selectedSale, setSelectedSale] = useState(null);
+  const { currentKiosk, isLoading: kioskLoading } = useKiosk();
 
   useEffect(() => {
     const loadUser = async () => {
@@ -85,8 +88,16 @@ export default function SalesHistory() {
   }, []);
 
   const { data: sales = [], isLoading } = useQuery({
-    queryKey: ['sales-history'],
-    queryFn: () => Sale.list('-created_date', 500),
+    queryKey: ['sales-history', currentKiosk?.id],
+    queryFn: () => {
+      if (currentKiosk?.id) {
+        return salesService.getSalesByKiosk(currentKiosk.id, 500);
+      } else if (user?.role === 'system_manager') {
+        return salesService.getAllSales(500);
+      }
+      return [];
+    },
+    enabled: !kioskLoading && (!!currentKiosk || user?.role === 'system_manager'),
   });
 
   // Filter sales based on user role and filters
