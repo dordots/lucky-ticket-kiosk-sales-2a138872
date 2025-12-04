@@ -34,10 +34,10 @@ export default function TicketGrid({ tickets, onSelect, selectedItems }) {
             className={`
               relative p-4 rounded-2xl text-right transition-all duration-200
               ${isOutOfStock 
-                ? 'bg-slate-100 cursor-not-allowed opacity-60' 
-                : 'bg-white shadow-sm hover:shadow-lg hover:scale-[1.02] active:scale-[0.98] cursor-pointer'
+                ? 'bg-accent cursor-not-allowed opacity-60' 
+                : 'bg-card shadow-sm hover:shadow-lg hover:scale-[1.02] active:scale-[0.98] cursor-pointer'
               }
-              ${selectedQty > 0 ? 'ring-2 ring-indigo-500 ring-offset-2' : ''}
+              ${selectedQty > 0 ? 'ring-2 ring-primary ring-offset-2' : ''}
             `}
           >
             {/* Ticket Color Header or Image */}
@@ -69,15 +69,20 @@ export default function TicketGrid({ tickets, onSelect, selectedItems }) {
             )}
 
             {/* Ticket Info */}
-            <h3 className="font-semibold text-slate-800 mb-1 truncate">
-              {ticket.name}
-            </h3>
+            <div className="mb-1">
+              <h3 className="font-semibold text-foreground truncate">
+                {ticket.name}
+              </h3>
+              {ticket.nickname && (
+                <p className="text-xs text-muted-foreground font-medium truncate">"{ticket.nickname}"</p>
+              )}
+            </div>
             
             <div className="flex items-center justify-between">
-              <span className="text-xl font-bold text-indigo-600">
+              <span className="text-xl font-bold text-primary">
                 ₪{ticket.price}
               </span>
-              <div className="flex items-center gap-1 text-slate-500">
+              <div className="flex items-center gap-1 text-muted-foreground">
                 <Package className="h-3.5 w-3.5" />
                 <span className="text-sm">{ticket.quantity}</span>
               </div>
@@ -85,7 +90,7 @@ export default function TicketGrid({ tickets, onSelect, selectedItems }) {
 
             {/* Quantity Badge */}
             {selectedQty > 0 && (
-              <Badge className="absolute -top-2 -left-2 h-7 w-7 rounded-full p-0 flex items-center justify-center bg-indigo-600 text-white text-sm font-bold">
+              <Badge className="absolute -top-2 -left-2 h-7 w-7 rounded-full p-0 flex items-center justify-center bg-primary text-primary-foreground text-sm font-bold">
                 {selectedQty}
               </Badge>
             )}
@@ -99,8 +104,8 @@ export default function TicketGrid({ tickets, onSelect, selectedItems }) {
 
             {/* Out of Stock Overlay */}
             {isOutOfStock && (
-              <div className="absolute inset-0 flex items-center justify-center bg-slate-100/80 rounded-2xl">
-                <span className="text-slate-500 font-medium">אזל מהמלאי</span>
+              <div className="absolute inset-0 flex items-center justify-center bg-accent/80 rounded-2xl">
+                <span className="text-muted-foreground font-medium">אזל מהמלאי</span>
               </div>
             )}
           </motion.button>

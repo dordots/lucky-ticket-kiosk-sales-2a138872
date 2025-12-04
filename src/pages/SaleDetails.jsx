@@ -79,7 +79,7 @@ export default function SaleDetails() {
   if (isLoading) {
     return (
       <div className="flex items-center justify-center min-h-[400px]">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600"></div>
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
       </div>
     );
   }
@@ -87,8 +87,8 @@ export default function SaleDetails() {
   if (!sale) {
     return (
       <div className="text-center py-16">
-        <h2 className="text-xl font-bold text-slate-800 mb-2">העסקה לא נמצאה</h2>
-        <p className="text-slate-500 mb-4">העסקה המבוקשת אינה קיימת במערכת</p>
+        <h2 className="text-xl font-bold text-foreground mb-2">העסקה לא נמצאה</h2>
+        <p className="text-muted-foreground mb-4">העסקה המבוקשת אינה קיימת במערכת</p>
         <Link to={createPageUrl("SalesHistory")}>
           <Button>חזרה להיסטוריית מכירות</Button>
         </Link>
@@ -109,8 +109,8 @@ export default function SaleDetails() {
             </Button>
           </Link>
           <div>
-            <h1 className="text-2xl font-bold text-slate-800">פרטי עסקה</h1>
-            <p className="text-slate-500 text-sm">מזהה: {sale.id?.slice(0, 8)}...</p>
+            <h1 className="text-2xl font-bold text-foreground">פרטי עסקה</h1>
+            <p className="text-muted-foreground text-sm">מזהה: {sale.id?.slice(0, 8)}...</p>
           </div>
         </div>
         {isOwner && sale.status === 'completed' && (
@@ -143,26 +143,26 @@ export default function SaleDetails() {
           </CardHeader>
           <CardContent className="space-y-6">
             <div className="grid grid-cols-2 gap-4">
-              <div className="flex items-center gap-3 p-3 bg-slate-50 rounded-lg">
-                <Calendar className="h-5 w-5 text-slate-400" />
+              <div className="flex items-center gap-3 p-3 bg-accent rounded-lg">
+                <Calendar className="h-5 w-5 text-muted-foreground" />
                 <div>
-                  <p className="text-xs text-slate-500">תאריך ושעה</p>
+                  <p className="text-xs text-muted-foreground">תאריך ושעה</p>
                   <p className="font-medium">
                     {format(new Date(sale.created_date), "dd/MM/yyyy HH:mm", { locale: he })}
                   </p>
                 </div>
               </div>
-              <div className="flex items-center gap-3 p-3 bg-slate-50 rounded-lg">
-                <User className="h-5 w-5 text-slate-400" />
+              <div className="flex items-center gap-3 p-3 bg-accent rounded-lg">
+                <User className="h-5 w-5 text-muted-foreground" />
                 <div>
-                  <p className="text-xs text-slate-500">מוכר</p>
+                  <p className="text-xs text-muted-foreground">מוכר</p>
                   <p className="font-medium">{sale.seller_name || "—"}</p>
                 </div>
               </div>
-              <div className="flex items-center gap-3 p-3 bg-slate-50 rounded-lg">
-                <PaymentIcon className="h-5 w-5 text-slate-400" />
+              <div className="flex items-center gap-3 p-3 bg-accent rounded-lg">
+                <PaymentIcon className="h-5 w-5 text-muted-foreground" />
                 <div>
-                  <p className="text-xs text-slate-500">אמצעי תשלום</p>
+                  <p className="text-xs text-muted-foreground">אמצעי תשלום</p>
                   <p className="font-medium">
                     {paymentLabels[sale.payment_method]?.label || "מזומן"}
                   </p>
@@ -182,16 +182,16 @@ export default function SaleDetails() {
             <Separator />
 
             <div>
-              <h3 className="font-semibold text-slate-800 mb-4">פריטים בעסקה</h3>
+              <h3 className="font-semibold text-foreground mb-4">פריטים בעסקה</h3>
               <div className="space-y-3">
                 {sale.items?.length > 0 ? sale.items.map((item, index) => (
                   <div 
                     key={index} 
-                    className="flex items-center justify-between p-4 bg-slate-50 rounded-lg"
+                    className="flex items-center justify-between p-4 bg-accent rounded-lg"
                   >
                     <div>
-                      <p className="font-medium text-slate-800">{item.ticket_name}</p>
-                      <p className="text-sm text-slate-500">
+                      <p className="font-medium text-foreground">{item.ticket_name}</p>
+                      <p className="text-sm text-muted-foreground">
                         {item.quantity} × ₪{item.unit_price?.toFixed(2)}
                       </p>
                     </div>
@@ -200,7 +200,7 @@ export default function SaleDetails() {
                     </p>
                   </div>
                 )) : (
-                  <p className="text-slate-500 text-center py-4">אין פריטים להצגה</p>
+                  <p className="text-muted-foreground text-center py-4">אין פריטים להצגה</p>
                 )}
               </div>
             </div>
@@ -209,8 +209,8 @@ export default function SaleDetails() {
               <>
                 <Separator />
                 <div>
-                  <h3 className="font-semibold text-slate-800 mb-2">הערות</h3>
-                  <p className="text-slate-600 bg-slate-50 p-3 rounded-lg">{sale.notes}</p>
+                  <h3 className="font-semibold text-foreground mb-2">הערות</h3>
+                  <p className="text-foreground bg-accent p-3 rounded-lg">{sale.notes}</p>
                 </div>
               </>
             )}
@@ -229,16 +229,16 @@ export default function SaleDetails() {
               <div className="space-y-4">
                 {auditLogs.map((log) => (
                   <div key={log.id} className="border-r-2 border-indigo-200 pr-4 pb-4">
-                    <p className="text-sm font-medium text-slate-800">
+                    <p className="text-sm font-medium text-foreground">
                       {log.action === 'create_sale' ? 'יצירת עסקה' :
                        log.action === 'edit_sale' ? 'עריכת עסקה' :
                        log.action === 'delete_sale' ? 'מחיקת עסקה' : log.action}
                     </p>
-                    <p className="text-xs text-slate-500">
+                    <p className="text-xs text-muted-foreground">
                       {log.actor_name} • {format(new Date(log.created_date), "dd/MM/yyyy HH:mm")}
                     </p>
                     {log.reason && (
-                      <p className="text-sm text-slate-600 mt-1 bg-slate-50 p-2 rounded">
+                      <p className="text-sm text-foreground mt-1 bg-accent p-2 rounded">
                         סיבה: {log.reason}
                       </p>
                     )}
@@ -246,7 +246,7 @@ export default function SaleDetails() {
                 ))}
               </div>
             ) : (
-              <p className="text-slate-500 text-center py-8">אין היסטוריית שינויים</p>
+              <p className="text-muted-foreground text-center py-8">אין היסטוריית שינויים</p>
             )}
           </CardContent>
         </Card>

@@ -183,6 +183,51 @@ export const onAuthStateChange = (callback) => {
   return onAuthStateChanged(auth, callback);
 };
 
+// Reset password (for admin)
+// Uses Firebase REST API to reset password
+export const resetUserPassword = async (email) => {
+  const currentUser = auth.currentUser;
+  if (!currentUser) {
+    throw new Error('לא מחובר - נא להתחבר לפני איפוס סיסמה');
+  }
+  
+  // Get the current user's ID token for authentication
+  const idToken = await currentUser.getIdToken();
+  
+  // Get Firebase config from the app
+  const { getApp } = await import('firebase/app');
+  const app = getApp();
+  const apiKey = app.options.apiKey;
+  
+  try {
+    // Use Firebase REST API to send password reset email
+    // This requires the Identity Toolkit API
+    const response = await fetch(
+      `https://identitytoolkit.googleapis.com/v1/accounts:sendOobCode?key=${apiKey}`,
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          requestType: 'PASSWORD_RESET',
+          email: email,
+        }),
+      }
+    );
+    
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.error?.message || 'שגיאה באיפוס סיסמה');
+    }
+    
+    return true;
+  } catch (error) {
+    console.error('Error resetting password:', error);
+    throw error;
+  }
+};
+
 // Get auth instance
 export const getAuthInstance = () => {
   return getAuth();

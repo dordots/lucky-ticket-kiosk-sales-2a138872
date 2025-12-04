@@ -47,8 +47,8 @@ export default function QuantityDialog({
         <div className="py-6 space-y-6">
           {/* Price Info */}
           <div className="text-center">
-            <p className="text-slate-500 mb-1">מחיר ליחידה</p>
-            <p className="text-2xl font-bold text-indigo-600">₪{ticket.price}</p>
+            <p className="text-muted-foreground mb-1">מחיר ליחידה</p>
+            <p className="text-2xl font-bold text-primary">₪{ticket.price}</p>
           </div>
 
           {/* Quantity Selector */}
@@ -102,15 +102,15 @@ export default function QuantityDialog({
           </div>
 
           {/* Total */}
-          <div className="bg-slate-50 rounded-xl p-4 text-center">
-            <p className="text-slate-500 mb-1">סה"כ</p>
-            <p className="text-3xl font-bold text-indigo-600">
+          <div className="bg-accent rounded-xl p-4 text-center">
+            <p className="text-muted-foreground mb-1">סה"כ</p>
+            <p className="text-3xl font-bold text-primary">
               ₪{(quantity * ticket.price).toFixed(2)}
             </p>
           </div>
 
           {/* Stock Info */}
-          <p className="text-center text-sm text-slate-500">
+          <p className="text-center text-sm text-muted-foreground">
             במלאי: {ticket.quantity} יחידות
           </p>
         </div>
@@ -121,7 +121,7 @@ export default function QuantityDialog({
           </Button>
           <Button 
             onClick={handleConfirm}
-            className="flex-1 bg-gradient-to-r from-indigo-500 to-purple-600"
+            className="flex-1 bg-theme-gradient"
           >
             הוסף לעגלה
           </Button>

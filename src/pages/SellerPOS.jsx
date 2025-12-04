@@ -20,6 +20,7 @@ import QuantityDialog from "@/components/pos/QuantityDialog";
 export default function SellerPOS() {
   const [user, setUser] = useState(null);
   const [searchTerm, setSearchTerm] = useState("");
+  const [priceFilter, setPriceFilter] = useState("all"); // all, 5-25, 30-50, 50-100
   const [cartItems, setCartItems] = useState({});
   const [paymentOpen, setPaymentOpen] = useState(false);
   const [selectedTicket, setSelectedTicket] = useState(null);
@@ -49,9 +50,25 @@ export default function SellerPOS() {
     queryFn: () => Notification.filter({ is_read: false }),
   });
 
-  const filteredTickets = tickets.filter(t => 
-    t.name.includes(searchTerm) || t.code?.includes(searchTerm)
-  );
+  const filteredTickets = tickets.filter(t => {
+    // Search filter
+    const searchLower = searchTerm.toLowerCase();
+    const matchesSearch = 
+      t.name?.toLowerCase().includes(searchLower) || 
+      t.code?.toLowerCase().includes(searchLower) ||
+      t.nickname?.toLowerCase().includes(searchLower);
+    if (!matchesSearch) return false;
+    
+    // Price filter
+    if (priceFilter !== "all") {
+      const price = t.price || 0;
+      if (priceFilter === "5-25" && (price < 5 || price > 25)) return false;
+      if (priceFilter === "30-50" && (price < 30 || price > 50)) return false;
+      if (priceFilter === "50-100" && (price < 50 || price > 100)) return false;
+    }
+    
+    return true;
+  });
 
   const handleTicketSelect = (ticket) => {
     setSelectedTicket(ticket);
@@ -227,19 +244,19 @@ export default function SellerPOS() {
   const isOwner = user?.position === 'owner' || user?.role === 'admin';
 
   return (
-    <div className="min-h-screen bg-slate-50 flex flex-col">
+    <div className="min-h-screen bg-background flex flex-col">
       
       {/* Header */}
-      <header className="bg-white border-b border-slate-200 px-4 py-3 sticky top-0 z-40">
+      <header className="bg-background border-b border-border px-4 py-3 sticky top-0 z-40">
         <div className="max-w-screen-2xl mx-auto flex items-center justify-between">
           <div className="flex items-center gap-4">
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center">
+              <div className="w-10 h-10 rounded-xl bg-theme-gradient flex items-center justify-center">
                 <ShoppingCart className="h-5 w-5 text-white" />
               </div>
               <div className="hidden sm:block">
-                <h1 className="text-lg font-bold text-slate-800">כרטיסי מזל</h1>
-                <p className="text-xs text-slate-500">מכירה מהירה</p>
+                <h1 className="text-lg font-bold text-foreground">דף מכירה</h1>
+                <p className="text-xs text-muted-foreground">מכירה מהירה</p>
               </div>
             </div>
           </div>
@@ -247,18 +264,54 @@ export default function SellerPOS() {
       </header>
 
       {/* Main Content */}
-      <div className="flex-1 flex flex-col lg:flex-row">
+      <div className="flex-1 flex flex-col lg:flex-row gap-6">
         {/* Tickets Section */}
         <div className="flex-1 p-4 lg:p-6 lg:pl-0">
+          {/* Price Filter Tabs */}
+          <div className="mb-4 flex flex-wrap gap-2">
+            <Button
+              variant={priceFilter === "all" ? "default" : "outline"}
+              size="sm"
+              onClick={() => setPriceFilter("all")}
+              className={priceFilter === "all" ? "bg-primary hover:bg-primary/90" : ""}
+            >
+              כל הכרטיסים
+            </Button>
+            <Button
+              variant={priceFilter === "5-25" ? "default" : "outline"}
+              size="sm"
+              onClick={() => setPriceFilter("5-25")}
+              className={priceFilter === "5-25" ? "bg-primary hover:bg-primary/90" : ""}
+            >
+              ₪5-25
+            </Button>
+            <Button
+              variant={priceFilter === "30-50" ? "default" : "outline"}
+              size="sm"
+              onClick={() => setPriceFilter("30-50")}
+              className={priceFilter === "30-50" ? "bg-primary hover:bg-primary/90" : ""}
+            >
+              ₪30-50
+            </Button>
+            <Button
+              variant={priceFilter === "50-100" ? "default" : "outline"}
+              size="sm"
+              onClick={() => setPriceFilter("50-100")}
+              className={priceFilter === "50-100" ? "bg-primary hover:bg-primary/90" : ""}
+            >
+              ₪50-100
+            </Button>
+          </div>
+
           {/* Search */}
           <div className="mb-6">
             <div className="relative max-w-md">
-              <Search className="absolute right-3 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-400" />
+              <Search className="absolute right-3 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
               <Input
                 placeholder="חיפוש כרטיס..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="pr-10 bg-white"
+                className="pr-10 bg-background"
               />
             </div>
           </div>
@@ -267,10 +320,10 @@ export default function SellerPOS() {
           {isLoading ? (
             <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
               {[...Array(10)].map((_, i) => (
-                <div key={i} className="bg-white rounded-2xl p-4 animate-pulse">
-                  <div className="h-20 bg-slate-200 rounded-xl mb-3" />
-                  <div className="h-4 bg-slate-200 rounded mb-2" />
-                  <div className="h-6 bg-slate-200 rounded w-1/2" />
+                <div key={i} className="bg-card rounded-2xl p-4 animate-pulse">
+                  <div className="h-20 bg-accent rounded-xl mb-3" />
+                  <div className="h-4 bg-accent rounded mb-2" />
+                  <div className="h-6 bg-accent rounded w-1/2" />
                 </div>
               ))}
             </div>
@@ -284,11 +337,11 @@ export default function SellerPOS() {
         </div>
 
         {/* Cart Section - Desktop */}
-        <div className="hidden lg:block w-96 bg-white border-r border-slate-200 p-6">
+        <div className="hidden lg:block w-96 bg-card border-r border-border p-6">
           <div className="flex items-center justify-between mb-6">
-            <h2 className="text-xl font-bold text-slate-800">עגלת קניות</h2>
+            <h2 className="text-xl font-bold text-foreground">עגלת קניות</h2>
             {getItemsCount() > 0 && (
-              <Badge variant="secondary" className="text-indigo-600 bg-indigo-50">
+              <Badge variant="secondary" className="text-primary bg-primary/10">
                 {getItemsCount()} פריטים
               </Badge>
             )}
@@ -309,7 +362,7 @@ export default function SellerPOS() {
           {getItemsCount() > 0 && (
             <Button
               onClick={() => setPaymentOpen(true)}
-              className="w-full h-14 text-lg bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 shadow-lg"
+              className="w-full h-14 text-lg bg-theme-gradient hover:opacity-90 shadow-lg transition-opacity"
             >
               <Check className="h-5 w-5 ml-2" />
               אשר מכירה - ₪{calculateTotal().toFixed(2)}
@@ -319,10 +372,10 @@ export default function SellerPOS() {
 
         {/* Cart Section - Mobile */}
         {getItemsCount() > 0 && (
-          <div className="lg:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-slate-200 p-4 shadow-lg">
+          <div className="lg:hidden fixed bottom-0 left-0 right-0 bg-card border-t border-border p-4 shadow-lg">
             <Button
               onClick={() => setPaymentOpen(true)}
-              className="w-full h-14 text-lg bg-gradient-to-r from-indigo-500 to-purple-600"
+              className="w-full h-14 text-lg bg-theme-gradient"
             >
               <ShoppingCart className="h-5 w-5 ml-2" />
               {getItemsCount()} פריטים - ₪{calculateTotal().toFixed(2)}

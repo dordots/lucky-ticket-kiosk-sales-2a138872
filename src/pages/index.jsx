@@ -22,6 +22,8 @@ import DeleteSale from "./DeleteSale";
 
 import AuditLog from "./AuditLog";
 
+import Settings from "./Settings";
+
 import Login from "./Login";
 
 import { BrowserRouter as Router, Route, Routes, useLocation } from 'react-router-dom';
@@ -49,6 +51,8 @@ const PAGES = {
     DeleteSale: DeleteSale,
     
     AuditLog: AuditLog,
+    
+    Settings: Settings,
     
 }
 
@@ -98,6 +102,8 @@ function PagesContent() {
                 <Route path="/DeleteSale" element={<DeleteSale />} />
                 
                 <Route path="/AuditLog" element={<AuditLog />} />
+                
+                <Route path="/Settings" element={<Settings />} />
                 
             </Routes>
         </Layout>

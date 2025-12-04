@@ -12,7 +12,8 @@ import {
   Shield,
   ShieldAlert,
   Mail,
-  Phone
+  Phone,
+  KeyRound
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -47,8 +48,8 @@ import {
 // Toast removed
 
 const positionLabels = {
-  owner: "בעל עסק",
-  seller: "מוכר",
+  owner: "זכיין",
+  seller: "עוזר זכיין",
 };
 
 const positionIcons = {
@@ -58,13 +59,14 @@ const positionIcons = {
 
 const positionColors = {
   owner: "bg-purple-100 text-purple-700",
-  seller: "bg-slate-100 text-slate-700",
+  seller: "bg-accent text-foreground",
 };
 
 export default function UsersManagement() {
   const [searchTerm, setSearchTerm] = useState("");
   const [dialogOpen, setDialogOpen] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [resetPasswordDialogOpen, setResetPasswordDialogOpen] = useState(false);
   const [selectedUser, setSelectedUser] = useState(null);
   const [formData, setFormData] = useState({
     email: "",
@@ -188,15 +190,15 @@ export default function UsersManagement() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-slate-800">ניהול משתמשים</h1>
-          <p className="text-slate-500">ניהול עובדים והרשאות</p>
+          <h1 className="text-2xl font-bold text-foreground">ניהול משתמשים</h1>
+          <p className="text-muted-foreground">ניהול זכיינים ועוזרי זכיין</p>
         </div>
         <Button 
           onClick={() => {
             resetForm();
             setDialogOpen(true);
           }}
-          className="bg-gradient-to-r from-indigo-500 to-purple-600"
+          className="bg-theme-gradient"
         >
           <Plus className="h-4 w-4 ml-2" />
           הוסף משתמש חדש
@@ -205,7 +207,7 @@ export default function UsersManagement() {
 
       {/* Search */}
       <div className="relative max-w-md">
-        <Search className="absolute right-3 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-400" />
+        <Search className="absolute right-3 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
         <Input
           placeholder="חיפוש לפי שם, מייל או טלפון..."
           value={searchTerm}
@@ -237,28 +239,28 @@ export default function UsersManagement() {
                           {(user.full_name || user.email || 'U').charAt(0).toUpperCase()}
                         </div>
                         <div>
-                          <h3 className="font-bold text-slate-800">
+                          <h3 className="font-bold text-foreground">
                             {user.full_name || 'ללא שם'}
                           </h3>
                           <Badge className={positionColors[user.position] || positionColors.seller}>
                             <PositionIcon className="h-3 w-3 ml-1" />
-                            {positionLabels[user.position] || 'מוכר'}
+                            {positionLabels[user.position] || 'עוזר זכיין'}
                           </Badge>
                         </div>
                       </div>
                       <Button variant="ghost" size="icon" onClick={() => handleEdit(user)}>
-                        <Edit className="h-4 w-4 text-slate-400" />
+                        <Edit className="h-4 w-4 text-muted-foreground" />
                       </Button>
                     </div>
 
                     <div className="space-y-2 text-sm">
-                      <div className="flex items-center gap-2 text-slate-600">
-                        <Mail className="h-4 w-4 text-slate-400" />
+                      <div className="flex items-center gap-2 text-foreground">
+                        <Mail className="h-4 w-4 text-muted-foreground" />
                         <span className="truncate">{user.email}</span>
                       </div>
                       {user.phone && (
-                        <div className="flex items-center gap-2 text-slate-600">
-                          <Phone className="h-4 w-4 text-slate-400" />
+                        <div className="flex items-center gap-2 text-foreground">
+                          <Phone className="h-4 w-4 text-muted-foreground" />
                           <span>{user.phone}</span>
                         </div>
                       )}
@@ -280,10 +282,10 @@ export default function UsersManagement() {
       </div>
 
       {filteredUsers.length === 0 && !isLoading && (
-        <div className="text-center py-12 text-slate-500">
+        <div className="text-center py-12 text-muted-foreground">
           <UserIcon className="h-12 w-12 mx-auto mb-4 opacity-30" />
           <p className="font-medium">לא נמצאו משתמשים</p>
-          <p className="text-sm text-slate-400 mt-1">הזמן משתמשים חדשים דרך מערכת ההזמנות</p>
+          <p className="text-sm text-muted-foreground mt-1">הזמן משתמשים חדשים דרך מערכת ההזמנות</p>
         </div>
       )}
 
@@ -293,13 +295,13 @@ export default function UsersManagement() {
             <Card key={i} className="animate-pulse">
               <CardContent className="p-6">
                 <div className="flex items-center gap-3 mb-4">
-                  <div className="w-12 h-12 rounded-full bg-slate-200" />
+                  <div className="w-12 h-12 rounded-full bg-accent" />
                   <div className="space-y-2">
-                    <div className="h-4 w-24 bg-slate-200 rounded" />
-                    <div className="h-3 w-16 bg-slate-200 rounded" />
+                    <div className="h-4 w-24 bg-accent rounded" />
+                    <div className="h-3 w-16 bg-accent rounded" />
                   </div>
                 </div>
-                <div className="h-3 w-full bg-slate-200 rounded" />
+                <div className="h-3 w-full bg-accent rounded" />
               </CardContent>
             </Card>
           ))}
@@ -315,16 +317,25 @@ export default function UsersManagement() {
 
           <div className="space-y-4 py-4">
             {selectedUser ? (
-              <div className="flex items-center gap-3 p-4 bg-slate-50 rounded-xl">
+              <div className="flex items-center gap-3 p-4 bg-accent rounded-xl">
                 <div className="w-12 h-12 rounded-full bg-gradient-to-br from-indigo-400 to-purple-500 flex items-center justify-center text-white font-bold text-lg">
                   {(selectedUser.full_name || selectedUser.email || 'U').charAt(0).toUpperCase()}
                 </div>
-                <div>
-                  <h3 className="font-bold text-slate-800">
+                <div className="flex-1">
+                  <h3 className="font-bold text-foreground">
                     {selectedUser.full_name || 'ללא שם'}
                   </h3>
-                  <p className="text-sm text-slate-500">{selectedUser.email}</p>
+                  <p className="text-sm text-muted-foreground">{selectedUser.email}</p>
                 </div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setResetPasswordDialogOpen(true)}
+                  className="text-indigo-600 border-indigo-200 hover:bg-indigo-50"
+                >
+                  <KeyRound className="h-4 w-4 ml-2" />
+                  איפוס סיסמה
+                </Button>
               </div>
             ) : (
               <>
@@ -376,13 +387,13 @@ export default function UsersManagement() {
                     <SelectItem value="owner">
                       <div className="flex items-center gap-2">
                         <ShieldAlert className="h-4 w-4" />
-                        <span>בעל עסק</span>
+                        <span>זכיין</span>
                       </div>
                     </SelectItem>
                     <SelectItem value="seller">
                       <div className="flex items-center gap-2">
                         <Shield className="h-4 w-4" />
-                        <span>מוכר</span>
+                        <span>עוזר זכיין</span>
                       </div>
                     </SelectItem>
                   </SelectContent>
@@ -413,13 +424,47 @@ export default function UsersManagement() {
             </Button>
             <Button 
               onClick={handleSubmit}
-              className="bg-gradient-to-r from-indigo-500 to-purple-600"
+              className="bg-theme-gradient"
             >
               עדכן
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Reset Password Dialog */}
+      <AlertDialog open={resetPasswordDialogOpen} onOpenChange={setResetPasswordDialogOpen}>
+        <AlertDialogContent dir="rtl">
+          <AlertDialogHeader>
+            <AlertDialogTitle>איפוס סיסמה</AlertDialogTitle>
+            <AlertDialogDescription>
+              האם אתה בטוח שברצונך לאפס את הסיסמה של {selectedUser?.full_name || selectedUser?.email}?
+              <br />
+              <br />
+              הודעת איפוס סיסמה תישלח לכתובת האימייל: <strong>{selectedUser?.email}</strong>
+              <br />
+              המשתמש יוכל ליצור סיסמה חדשה דרך הקישור בהודעה.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>ביטול</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={async () => {
+                try {
+                  await firebase.auth.resetUserPassword(selectedUser?.email);
+                  alert('הודעת איפוס סיסמה נשלחה בהצלחה לכתובת האימייל');
+                  setResetPasswordDialogOpen(false);
+                } catch (error) {
+                  alert('שגיאה באיפוס סיסמה: ' + error.message);
+                }
+              }}
+              className="bg-primary hover:bg-primary/90"
+            >
+              שלח הודעת איפוס
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

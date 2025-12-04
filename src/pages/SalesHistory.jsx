@@ -13,7 +13,8 @@ import {
   Eye,
   CreditCard,
   Banknote,
-  Wallet
+  Wallet,
+  FileText
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -163,8 +164,8 @@ export default function SalesHistory() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-slate-800">היסטוריית מכירות</h1>
-          <p className="text-slate-500">
+          <h1 className="text-2xl font-bold text-foreground">היסטוריית מכירות</h1>
+          <p className="text-muted-foreground">
             {isOwner ? 'כל העסקאות במערכת' : 'העסקאות שלך'}
           </p>
         </div>
@@ -202,7 +203,7 @@ export default function SalesHistory() {
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             {/* Search */}
             <div className="relative">
-              <Search className="absolute right-3 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-400" />
+              <Search className="absolute right-3 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
               <Input
                 placeholder="חיפוש מוכר או כרטיס..."
                 value={searchTerm}
@@ -269,13 +270,14 @@ export default function SalesHistory() {
           <div className="overflow-x-auto">
             <Table>
               <TableHeader>
-                <TableRow className="bg-slate-50">
+                <TableRow className="bg-accent">
                   <TableHead className="text-right">תאריך ושעה</TableHead>
                   <TableHead className="text-right">מוכר</TableHead>
                   <TableHead className="text-right">פריטים</TableHead>
                   <TableHead className="text-right">סכום</TableHead>
                   <TableHead className="text-right">תשלום</TableHead>
                   <TableHead className="text-right">סטטוס</TableHead>
+                  <TableHead className="text-right">הערות</TableHead>
                   <TableHead className="text-right">פעולות</TableHead>
                 </TableRow>
               </TableHeader>
@@ -284,13 +286,13 @@ export default function SalesHistory() {
                   const PaymentIcon = paymentIcons[sale.payment_method] || Wallet;
                   
                   return (
-                    <TableRow key={sale.id} className="hover:bg-slate-50">
+                    <TableRow key={sale.id} className="hover:bg-accent">
                       <TableCell>
                         <div>
                           <p className="font-medium">
                             {format(new Date(sale.created_date), "dd/MM/yyyy", { locale: he })}
                           </p>
-                          <p className="text-xs text-slate-500">
+                          <p className="text-xs text-muted-foreground">
                             {format(new Date(sale.created_date), "HH:mm")}
                           </p>
                         </div>
@@ -304,7 +306,7 @@ export default function SalesHistory() {
                             </p>
                           ))}
                           {sale.items?.length > 2 && (
-                            <p className="text-xs text-slate-500">
+                            <p className="text-xs text-muted-foreground">
                               +{sale.items.length - 2} נוספים
                             </p>
                           )}
@@ -315,7 +317,7 @@ export default function SalesHistory() {
                       </TableCell>
                       <TableCell>
                         <div className="flex items-center gap-2">
-                          <PaymentIcon className="h-4 w-4 text-slate-400" />
+                          <PaymentIcon className="h-4 w-4 text-muted-foreground" />
                           <span className="text-sm">
                             {sale.payment_method === 'cash' ? 'מזומן' : 'כרטיס'}
                           </span>
@@ -325,6 +327,18 @@ export default function SalesHistory() {
                         <Badge className={statusColors[sale.status]}>
                           {statusLabels[sale.status]}
                         </Badge>
+                      </TableCell>
+                      <TableCell>
+                        {sale.notes ? (
+                          <div className="flex items-center gap-1" title={sale.notes}>
+                            <FileText className="h-4 w-4 text-indigo-600" />
+                            <span className="text-xs text-slate-500 truncate max-w-[100px]">
+                              {sale.notes.length > 20 ? sale.notes.substring(0, 20) + '...' : sale.notes}
+                            </span>
+                          </div>
+                        ) : (
+                          <span className="text-slate-300">—</span>
+                        )}
                       </TableCell>
                       <TableCell>
                         <Button 
@@ -343,10 +357,10 @@ export default function SalesHistory() {
           </div>
 
           {filteredSales.length === 0 && (
-            <div className="text-center py-12 text-slate-500">
+            <div className="text-center py-12 text-muted-foreground">
               <Eye className="h-12 w-12 mx-auto mb-3 opacity-30" />
               <p className="font-medium">לא נמצאו עסקאות</p>
-              <p className="text-sm text-slate-400 mt-1">בצע מכירות כדי לראות את ההיסטוריה כאן</p>
+              <p className="text-sm text-muted-foreground mt-1">בצע מכירות כדי לראות את ההיסטוריה כאן</p>
             </div>
           )}
         </CardContent>
@@ -363,23 +377,23 @@ export default function SalesHistory() {
             <div className="space-y-4">
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <p className="text-sm text-slate-500">תאריך</p>
+                  <p className="text-sm text-muted-foreground">תאריך</p>
                   <p className="font-medium">
                     {format(new Date(selectedSale.created_date), "dd/MM/yyyy HH:mm", { locale: he })}
                   </p>
                 </div>
                 <div>
-                  <p className="text-sm text-slate-500">מוכר</p>
+                  <p className="text-sm text-muted-foreground">מוכר</p>
                   <p className="font-medium">{selectedSale.seller_name}</p>
                 </div>
                 <div>
-                  <p className="text-sm text-slate-500">אמצעי תשלום</p>
+                  <p className="text-sm text-muted-foreground">אמצעי תשלום</p>
                   <p className="font-medium">
                     {selectedSale.payment_method === 'cash' ? 'מזומן' : 'כרטיס אשראי'}
                   </p>
                 </div>
                 <div>
-                  <p className="text-sm text-slate-500">סטטוס</p>
+                  <p className="text-sm text-muted-foreground">סטטוס</p>
                   <Badge className={statusColors[selectedSale.status]}>
                     {statusLabels[selectedSale.status]}
                   </Badge>
@@ -388,7 +402,7 @@ export default function SalesHistory() {
 
               <div>
                 <p className="text-sm text-slate-500 mb-2">פריטים</p>
-                <div className="bg-slate-50 rounded-lg p-3 space-y-2">
+                <div className="bg-accent rounded-lg p-3 space-y-2">
                   {selectedSale.items?.map((item, index) => (
                     <div key={index} className="flex items-center justify-between">
                       <span>{item.quantity}× {item.ticket_name}</span>
@@ -403,9 +417,12 @@ export default function SalesHistory() {
               </div>
 
               {selectedSale.notes && (
-                <div>
-                  <p className="text-sm text-slate-500">הערות</p>
-                  <p className="text-slate-700">{selectedSale.notes}</p>
+                <div className="bg-indigo-50 border border-indigo-200 rounded-lg p-3">
+                  <div className="flex items-center gap-2 mb-2">
+                    <FileText className="h-4 w-4 text-indigo-600" />
+                    <p className="text-sm font-medium text-indigo-800">הערות</p>
+                  </div>
+                  <p className="text-foreground whitespace-pre-wrap">{selectedSale.notes}</p>
                 </div>
               )}
             </div>

@@ -116,6 +116,9 @@ export const firebase = {
     },
     changePassword: (currentPassword, newPassword) => {
       return authService.changePassword(currentPassword, newPassword);
+    },
+    resetUserPassword: (email) => {
+      return authService.resetUserPassword(email);
     }
   }
 };

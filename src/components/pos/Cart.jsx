@@ -16,7 +16,7 @@ export default function Cart({
 
   if (cartItems.length === 0) {
     return (
-      <div className="flex flex-col items-center justify-center h-full text-slate-400 py-12">
+      <div className="flex flex-col items-center justify-center h-full text-muted-foreground py-12">
         <ShoppingCart className="h-16 w-16 mb-4 opacity-30" />
         <p className="text-lg">העגלה ריקה</p>
         <p className="text-sm">בחר כרטיסים להוספה</p>
@@ -39,26 +39,26 @@ export default function Cart({
                   initial={{ opacity: 0, x: 20 }}
                   animate={{ opacity: 1, x: 0 }}
                   exit={{ opacity: 0, x: -20 }}
-                  className="bg-slate-50 rounded-xl p-3"
+                  className="bg-accent rounded-xl p-3"
                 >
                   <div className="flex items-start justify-between mb-2">
                     <button
                       onClick={() => onRemove(ticketId)}
-                      className="p-1 text-slate-400 hover:text-red-500 transition-colors"
+                      className="p-1 text-muted-foreground hover:text-destructive transition-colors"
                     >
                       <Trash2 className="h-4 w-4" />
                     </button>
                     <div className="text-right flex-1 mr-2">
-                      <h4 className="font-medium text-slate-800">{ticket.name}</h4>
-                      <p className="text-sm text-slate-500">₪{item.unitPrice} ליחידה</p>
+                      <h4 className="font-medium text-foreground">{ticket.name}</h4>
+                      <p className="text-sm text-muted-foreground">₪{item.unitPrice} ליחידה</p>
                     </div>
                   </div>
 
                   <div className="flex items-center justify-between">
-                    <span className="font-bold text-indigo-600">
+                    <span className="font-bold text-primary">
                       ₪{(item.quantity * item.unitPrice).toFixed(2)}
                     </span>
-                    <div className="flex items-center gap-2 bg-white rounded-lg p-1">
+                    <div className="flex items-center gap-2 bg-background rounded-lg p-1">
                       <Button
                         variant="ghost"
                         size="icon"
@@ -89,16 +89,16 @@ export default function Cart({
       </ScrollArea>
 
       {/* Total & Actions */}
-      <div className="border-t border-slate-200 pt-4 mt-4 space-y-4">
+      <div className="border-t border-border pt-4 mt-4 space-y-4">
         <div className="flex items-center justify-between px-1">
-          <span className="text-2xl font-bold text-indigo-600">₪{total.toFixed(2)}</span>
-          <span className="text-slate-600 font-medium">סה"כ לתשלום</span>
+          <span className="text-2xl font-bold text-primary">₪{total.toFixed(2)}</span>
+          <span className="text-foreground font-medium">סה"כ לתשלום</span>
         </div>
         
         <Button
           variant="outline"
           onClick={onClear}
-          className="w-full text-slate-600"
+          className="w-full"
         >
           <Trash2 className="h-4 w-4 ml-2" />
           נקה עגלה

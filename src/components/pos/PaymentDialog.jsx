@@ -97,8 +97,8 @@ export default function PaymentDialog({
               >
                 <CheckCircle2 className="h-10 w-10 text-green-600" />
               </motion.div>
-              <h3 className="text-xl font-bold text-slate-800 mb-2">העסקה הושלמה!</h3>
-              <p className="text-slate-500 mb-4">סכום: ₪{savedTotal.toFixed(2)}</p>
+              <h3 className="text-xl font-bold text-foreground mb-2">העסקה הושלמה!</h3>
+              <p className="text-muted-foreground mb-4">סכום: ₪{savedTotal.toFixed(2)}</p>
               <Button
                 onClick={() => {
                   setShowSuccess(false);
@@ -126,9 +126,9 @@ export default function PaymentDialog({
 
               <div className="space-y-6 py-4">
                 {/* Summary */}
-                <div className="bg-slate-50 rounded-xl p-4 text-center">
-                  <p className="text-slate-500 mb-1">{itemsCount} פריטים</p>
-                  <p className="text-3xl font-bold text-indigo-600">₪{total.toFixed(2)}</p>
+                <div className="bg-accent rounded-xl p-4 text-center">
+                  <p className="text-muted-foreground mb-1">{itemsCount} פריטים</p>
+                  <p className="text-3xl font-bold text-primary">₪{total.toFixed(2)}</p>
                 </div>
 
                 {/* Payment Methods */}
@@ -145,7 +145,7 @@ export default function PaymentDialog({
                           p-4 rounded-xl transition-all duration-200
                           ${selectedMethod === method.id 
                             ? 'ring-2 ring-indigo-500 ring-offset-2' 
-                            : 'hover:bg-slate-50'
+                            : 'hover:bg-accent'
                           }
                         `}
                       >
@@ -190,7 +190,7 @@ export default function PaymentDialog({
                   <Button
                     onClick={handleConfirm}
                     disabled={isProcessing}
-                    className="flex-1 bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700"
+                    className="flex-1 bg-theme-gradient hover:opacity-90 transition-opacity"
                   >
                     {isProcessing ? (
                       <Loader2 className="h-5 w-5 animate-spin" />

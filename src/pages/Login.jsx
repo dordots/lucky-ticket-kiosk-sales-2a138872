@@ -42,7 +42,7 @@ export default function Login() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-indigo-50 via-white to-purple-50 flex items-center justify-center p-4" dir="rtl">
+    <div className="min-h-screen bg-background flex items-center justify-center p-4" dir="rtl">
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
@@ -55,7 +55,7 @@ export default function Login() {
               <ShoppingCart className="h-8 w-8 text-white" />
             </div>
             <div>
-              <CardTitle className="text-2xl font-bold text-slate-800">כרטיסי מזל</CardTitle>
+              <CardTitle className="text-2xl font-bold text-foreground">כרטיסי מזל</CardTitle>
               <CardDescription className="mt-2">התחבר למערכת ניהול המכירות</CardDescription>
             </div>
           </CardHeader>
@@ -66,7 +66,7 @@ export default function Login() {
                 <motion.div
                   initial={{ opacity: 0, y: -10 }}
                   animate={{ opacity: 1, y: 0 }}
-                  className="flex items-center gap-2 p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm"
+                  className="flex items-center gap-2 p-3 bg-destructive/20 border border-destructive/50 rounded-lg text-destructive text-sm"
                 >
                   <AlertCircle className="h-4 w-4" />
                   <span>{error}</span>
@@ -103,7 +103,7 @@ export default function Login() {
 
               <Button
                 type="submit"
-                className="w-full bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700"
+                className="w-full bg-theme-gradient hover:opacity-90 transition-opacity"
                 disabled={isLoading}
               >
                 {isLoading ? (

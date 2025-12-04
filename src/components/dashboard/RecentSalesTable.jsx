@@ -54,7 +54,7 @@ export default function RecentSalesTable({
 }) {
   if (!sales || sales.length === 0) {
     return (
-      <div className="text-center py-12 text-slate-500">
+      <div className="text-center py-12 text-muted-foreground">
         <p>אין עסקאות להצגה</p>
       </div>
     );
@@ -64,7 +64,7 @@ export default function RecentSalesTable({
     <div className="overflow-x-auto">
       <Table>
         <TableHeader>
-          <TableRow className="bg-slate-50">
+          <TableRow className="bg-accent">
             <TableHead className="text-right">תאריך</TableHead>
             <TableHead className="text-right">מוכר</TableHead>
             <TableHead className="text-right">פריטים</TableHead>
@@ -84,12 +84,12 @@ export default function RecentSalesTable({
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: index * 0.05 }}
-                className="hover:bg-slate-50 transition-colors"
+                className="hover:bg-accent transition-colors"
               >
                 <TableCell className="font-medium">
                   <div>
                     <p>{format(new Date(sale.created_date), "dd/MM/yyyy", { locale: he })}</p>
-                    <p className="text-xs text-slate-500">
+                    <p className="text-xs text-muted-foreground">
                       {format(new Date(sale.created_date), "HH:mm")}
                     </p>
                   </div>
@@ -103,18 +103,18 @@ export default function RecentSalesTable({
                       </p>
                     ))}
                     {sale.items?.length > 2 && (
-                      <p className="text-xs text-slate-500">
+                      <p className="text-xs text-muted-foreground">
                         +{sale.items.length - 2} נוספים
                       </p>
                     )}
                   </div>
                 </TableCell>
-                <TableCell className="font-bold text-indigo-600">
+                <TableCell className="font-bold text-primary">
                   ₪{sale.total_amount?.toFixed(2)}
                 </TableCell>
                 <TableCell>
                   <div className="flex items-center gap-2">
-                    <PaymentIcon className="h-4 w-4 text-slate-400" />
+                    <PaymentIcon className="h-4 w-4 text-muted-foreground" />
                     <span className="text-sm">
                       {sale.payment_method === 'cash' ? 'מזומן' : 'כרטיס'}
                     </span>

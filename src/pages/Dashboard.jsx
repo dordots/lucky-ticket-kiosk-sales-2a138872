@@ -3,7 +3,7 @@ import { auth, Sale, TicketType, User } from "@/api/entities";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
 import { createPageUrl } from "@/utils";
-import { format, startOfDay, endOfDay, startOfMonth } from "date-fns";
+import { format, startOfDay, endOfDay, startOfMonth, startOfWeek, endOfWeek, startOfYear, endOfYear } from "date-fns";
 import { he } from "date-fns/locale";
 import { 
   DollarSign, 
@@ -23,6 +23,7 @@ import SalesChart from "@/components/dashboard/SalesChart";
 
 export default function Dashboard() {
   const [user, setUser] = useState(null);
+  const [salesPeriod, setSalesPeriod] = useState("week"); // day, week, month, year
 
   useEffect(() => {
     const loadUser = async () => {
@@ -97,7 +98,7 @@ export default function Dashboard() {
     return (
       <div className="space-y-8">
         <div className="flex items-center justify-center min-h-[400px]">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600"></div>
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
         </div>
       </div>
     );
@@ -108,13 +109,13 @@ export default function Dashboard() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-slate-800">לוח בקרה</h1>
-          <p className="text-slate-500">
+          <h1 className="text-2xl font-bold text-foreground">לוח בקרה</h1>
+          <p className="text-muted-foreground">
             {format(today, "EEEE, d בMMMM yyyy", { locale: he })}
           </p>
         </div>
         <Link to={createPageUrl("SellerPOS")}>
-          <Button className="bg-gradient-to-r from-indigo-500 to-purple-600">
+          <Button className="bg-theme-gradient">
             <ShoppingCart className="h-4 w-4 ml-2" />
             מכירה חדשה
           </Button>
@@ -143,6 +144,7 @@ export default function Dashboard() {
           icon={Package}
           color={lowStockCount > 0 ? "orange" : "blue"}
           delay={0.2}
+          description="כרטיסים שהמלאי שלהם נמוך מסף ההתראה"
         />
         <StatsCard
           title="הכנסות החודש"
@@ -160,11 +162,50 @@ export default function Dashboard() {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Sales Chart */}
         <Card className="shadow-sm">
-          <CardHeader>
-            <CardTitle className="text-lg">מכירות השבוע</CardTitle>
+          <CardHeader className="flex flex-row items-center justify-between">
+            <CardTitle className="text-lg">
+              {salesPeriod === "day" && "מכירות היום"}
+              {salesPeriod === "week" && "מכירות השבוע"}
+              {salesPeriod === "month" && "מכירות החודש"}
+              {salesPeriod === "year" && "מכירות השנה"}
+            </CardTitle>
+            <div className="flex gap-2">
+              <Button
+                variant={salesPeriod === "day" ? "default" : "outline"}
+                size="sm"
+                onClick={() => setSalesPeriod("day")}
+                className={salesPeriod === "day" ? "bg-primary hover:bg-primary/90" : ""}
+              >
+                יום
+              </Button>
+              <Button
+                variant={salesPeriod === "week" ? "default" : "outline"}
+                size="sm"
+                onClick={() => setSalesPeriod("week")}
+                className={salesPeriod === "week" ? "bg-primary hover:bg-primary/90" : ""}
+              >
+                שבוע
+              </Button>
+              <Button
+                variant={salesPeriod === "month" ? "default" : "outline"}
+                size="sm"
+                onClick={() => setSalesPeriod("month")}
+                className={salesPeriod === "month" ? "bg-primary hover:bg-primary/90" : ""}
+              >
+                חודש
+              </Button>
+              <Button
+                variant={salesPeriod === "year" ? "default" : "outline"}
+                size="sm"
+                onClick={() => setSalesPeriod("year")}
+                className={salesPeriod === "year" ? "bg-primary hover:bg-primary/90" : ""}
+              >
+                שנה
+              </Button>
+            </div>
           </CardHeader>
           <CardContent>
-            <SalesChart sales={sales} />
+            <SalesChart sales={sales} period={salesPeriod} />
           </CardContent>
         </Card>
 
@@ -198,22 +239,22 @@ export default function Dashboard() {
                     return tickets.slice(0, 5).map((ticket) => (
                       <div key={ticket.id} className="space-y-2">
                         <div className="flex items-center justify-between">
-                          <span className="font-medium text-slate-700">{ticket.name}</span>
+                          <span className="font-medium text-foreground">{ticket.name}</span>
                           <div className="text-left">
-                            <span className="font-bold text-slate-400">₪0.00</span>
-                            <span className="text-sm text-slate-400 mr-2">(0 יח')</span>
+                            <span className="font-bold text-muted-foreground">₪0.00</span>
+                            <span className="text-sm text-muted-foreground mr-2">(0 יח')</span>
                           </div>
                         </div>
-                        <div className="h-2 bg-slate-100 rounded-full overflow-hidden">
-                          <div className="h-full bg-slate-200 rounded-full" style={{ width: '0%' }} />
+                        <div className="h-2 bg-accent rounded-full overflow-hidden">
+                          <div className="h-full bg-accent rounded-full" style={{ width: '0%' }} />
                         </div>
                       </div>
                     ));
                   }
                   return (
                     <div className="text-center py-8">
-                      <p className="text-slate-500">אין מכירות עדיין</p>
-                      <p className="text-sm text-slate-400">המידע יעודכן לאחר מכירות</p>
+                      <p className="text-muted-foreground">אין מכירות עדיין</p>
+                      <p className="text-sm text-muted-foreground">המידע יעודכן לאחר מכירות</p>
                     </div>
                   );
                 }
@@ -223,17 +264,17 @@ export default function Dashboard() {
                 return sorted.map(([name, data], index) => (
                   <div key={name} className="space-y-2">
                     <div className="flex items-center justify-between">
-                      <span className="font-medium text-slate-700">{name}</span>
+                      <span className="font-medium text-foreground">{name}</span>
                       <div className="text-left">
-                        <span className="font-bold text-indigo-600">
+                        <span className="font-bold text-primary">
                           ₪{data.revenue.toFixed(2)}
                         </span>
-                        <span className="text-sm text-slate-500 mr-2">
+                        <span className="text-sm text-muted-foreground mr-2">
                           ({data.quantity} יח')
                         </span>
                       </div>
                     </div>
-                    <div className="h-2 bg-slate-100 rounded-full overflow-hidden">
+                    <div className="h-2 bg-accent rounded-full overflow-hidden">
                       <div 
                         className="h-full bg-gradient-to-r from-indigo-500 to-purple-500 rounded-full"
                         style={{ width: `${(data.revenue / maxRevenue) * 100}%` }}

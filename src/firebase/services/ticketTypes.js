@@ -14,6 +14,47 @@ import { db } from '../config';
 
 const COLLECTION_NAME = 'ticketTypes';
 
+// Generate unique code for ticket
+export const generateUniqueCode = async (category = 'custom') => {
+  const maxAttempts = 10;
+  let attempts = 0;
+  
+  while (attempts < maxAttempts) {
+    // Generate code based on category
+    let code;
+    if (category === 'pais') {
+      // For Pais tickets: PAIS-XXXXX (random 5 chars)
+      code = 'PAIS-' + Math.random().toString(36).substring(2, 7).toUpperCase();
+    } else {
+      // For custom tickets: CUST-XXXXX (random 5 chars)
+      code = 'CUST-' + Math.random().toString(36).substring(2, 7).toUpperCase();
+    }
+    
+    // Check if code already exists
+    try {
+      const ticketTypesRef = collection(db, COLLECTION_NAME);
+      const codeQuery = query(ticketTypesRef, where('code', '==', code));
+      const codeSnapshot = await getDocs(codeQuery);
+      
+      if (codeSnapshot.empty) {
+        return code; // Code is unique
+      }
+    } catch (error) {
+      console.error('Error checking code uniqueness:', error);
+      // If error checking, return the code anyway (better than failing)
+      if (attempts === maxAttempts - 1) {
+        return code;
+      }
+    }
+    
+    attempts++;
+  }
+  
+  // Fallback: use timestamp if all attempts failed
+  const timestamp = Date.now().toString(36).toUpperCase().slice(-5);
+  return category === 'pais' ? `PAIS-${timestamp}` : `CUST-${timestamp}`;
+};
+
 // Get all ticket types
 export const getAllTicketTypes = async () => {
   try {

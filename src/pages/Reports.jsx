@@ -231,11 +231,11 @@ export default function Reports() {
   const CustomTooltip = ({ active, payload, label }) => {
     if (active && payload && payload.length) {
       return (
-        <div className="bg-white rounded-lg shadow-lg p-3 border border-slate-200">
-          <p className="text-sm font-medium text-slate-800 mb-1">{label}</p>
+        <div className="bg-card rounded-lg shadow-lg p-3 border border-border">
+          <p className="text-sm font-medium text-foreground mb-1">{label}</p>
           {payload.map((entry, index) => (
-            <p key={index} className="text-sm" style={{ color: entry.color }}>
-              {entry.name}: ₪{entry.value?.toFixed(2)}
+            <p key={index} className="text-sm text-foreground">
+              <span style={{ color: entry.color }}>●</span> {entry.name}: ₪{entry.value?.toFixed(2)}
             </p>
           ))}
         </div>
@@ -249,8 +249,8 @@ export default function Reports() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-slate-800">דוחות וסיכומים</h1>
-          <p className="text-slate-500">ניתוח מכירות וביצועים</p>
+          <h1 className="text-2xl font-bold text-foreground">דוחות וסיכומים</h1>
+          <p className="text-muted-foreground">ניתוח מכירות וביצועים</p>
         </div>
         <div className="flex items-center gap-3">
           <Tabs value={reportPeriod} onValueChange={setReportPeriod}>
@@ -321,7 +321,16 @@ export default function Reports() {
                   <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
                   <XAxis dataKey="date" stroke="#94a3b8" fontSize={12} />
                   <YAxis stroke="#94a3b8" fontSize={12} tickFormatter={(v) => `₪${v}`} />
-                  <Tooltip content={<CustomTooltip />} />
+                  <Tooltip 
+                    content={<CustomTooltip />}
+                    contentStyle={{ 
+                      backgroundColor: 'hsl(var(--card))',
+                      border: '1px solid hsl(var(--border))',
+                      color: 'hsl(var(--foreground))'
+                    }}
+                    itemStyle={{ color: 'hsl(var(--foreground))' }}
+                    labelStyle={{ color: 'hsl(var(--foreground))' }}
+                  />
                   <Bar dataKey="revenue" fill="#6366f1" radius={[4, 4, 0, 0]} name="הכנסות" />
                 </BarChart>
               </ResponsiveContainer>
@@ -346,13 +355,27 @@ export default function Reports() {
                     outerRadius={100}
                     paddingAngle={5}
                     dataKey="value"
-                    label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
+                    label={false}
                   >
                     {paymentDistribution.map((entry, index) => (
                       <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                     ))}
                   </Pie>
-                  <Tooltip formatter={(value) => `₪${value.toFixed(2)}`} />
+                  <Legend 
+                    formatter={(value) => value}
+                    wrapperStyle={{ color: 'hsl(var(--foreground))' }}
+                    iconType="circle"
+                  />
+                  <Tooltip 
+                    formatter={(value) => `₪${value.toFixed(2)}`}
+                    contentStyle={{ 
+                      backgroundColor: 'hsl(var(--card))',
+                      border: '1px solid hsl(var(--border))',
+                      color: 'hsl(var(--foreground))'
+                    }}
+                    itemStyle={{ color: 'hsl(var(--foreground))' }}
+                    labelStyle={{ color: 'hsl(var(--foreground))' }}
+                  />
                 </PieChart>
               </ResponsiveContainer>
             </div>
@@ -374,13 +397,13 @@ export default function Reports() {
                 return (
                   <div key={ticket.name} className="space-y-2">
                     <div className="flex items-center justify-between">
-                      <span className="font-medium text-slate-700">{ticket.name}</span>
+                      <span className="font-medium text-foreground">{ticket.name}</span>
                       <div className="text-left">
-                        <span className="font-bold text-indigo-600">₪{ticket.revenue.toFixed(2)}</span>
-                        <span className="text-sm text-slate-500 mr-2">({ticket.quantity} יח')</span>
+                        <span className="font-bold text-primary">₪{ticket.revenue.toFixed(2)}</span>
+                        <span className="text-sm text-muted-foreground mr-2">({ticket.quantity} יח')</span>
                       </div>
                     </div>
-                    <div className="h-2 bg-slate-100 rounded-full overflow-hidden">
+                    <div className="h-2 bg-accent rounded-full overflow-hidden">
                       <div 
                         className="h-full rounded-full"
                         style={{ 
@@ -392,10 +415,10 @@ export default function Reports() {
                   </div>
                 );
               }) : (
-                <div className="text-center py-8 text-slate-500">
+                <div className="text-center py-8 text-muted-foreground">
                   <Package className="h-12 w-12 mx-auto mb-3 opacity-30" />
                   <p>אין מכירות בתקופה זו</p>
-                  <p className="text-sm text-slate-400">בצע מכירות כדי לראות נתונים</p>
+                  <p className="text-sm text-muted-foreground">בצע מכירות כדי לראות נתונים</p>
                 </div>
               )}
             </div>
@@ -410,7 +433,7 @@ export default function Reports() {
           <CardContent>
             <div className="space-y-4">
               {sellerPerformance.length > 0 ? sellerPerformance.slice(0, 6).map((seller, index) => (
-                <div key={seller.name} className="flex items-center justify-between p-3 bg-slate-50 rounded-lg">
+                <div key={seller.name} className="flex items-center justify-between p-3 bg-slate-50 dark:bg-accent rounded-lg">
                   <div className="flex items-center gap-3">
                     <div className={`w-8 h-8 rounded-full flex items-center justify-center text-white font-medium`}
                       style={{ backgroundColor: COLORS[index % COLORS.length] }}
@@ -418,20 +441,20 @@ export default function Reports() {
                       {seller.name.charAt(0)}
                     </div>
                     <div>
-                      <p className="font-medium text-slate-800">{seller.name}</p>
-                      <p className="text-sm text-slate-500">{seller.count} עסקאות</p>
+                      <p className="font-medium text-foreground">{seller.name}</p>
+                      <p className="text-sm text-muted-foreground">{seller.count} עסקאות</p>
                     </div>
                   </div>
                   <div className="text-left">
                     <p className="font-bold text-indigo-600">₪{seller.revenue.toFixed(2)}</p>
-                    <p className="text-sm text-slate-500">{seller.items} כרטיסים</p>
+                    <p className="text-sm text-muted-foreground">{seller.items} כרטיסים</p>
                   </div>
                 </div>
               )) : (
-                <div className="text-center py-8 text-slate-500">
+                <div className="text-center py-8 text-muted-foreground">
                   <Users className="h-12 w-12 mx-auto mb-3 opacity-30" />
                   <p>אין נתוני מוכרים עדיין</p>
-                  <p className="text-sm text-slate-400">הנתונים יופיעו לאחר מכירות</p>
+                  <p className="text-sm text-muted-foreground">הנתונים יופיעו לאחר מכירות</p>
                 </div>
               )}
             </div>
@@ -452,24 +475,26 @@ export default function Reports() {
                 <div 
                   key={ticket.id} 
                   className={`p-4 rounded-lg border ${
-                    ticket.quantity === 0 ? 'bg-red-50 border-red-200' : 'bg-amber-50 border-amber-200'
+                    ticket.quantity === 0 
+                      ? 'bg-red-50 dark:bg-red-900/30 border-red-200 dark:border-red-800/50' 
+                      : 'bg-amber-50 dark:bg-amber-900/30 border-amber-200 dark:border-amber-800/50'
                   }`}
                 >
                   <div className="flex items-center justify-between mb-2">
-                    <span className="font-medium text-slate-800">{ticket.name}</span>
+                    <span className="font-medium text-foreground">{ticket.name}</span>
                     <span className={`text-sm font-bold ${
-                      ticket.quantity === 0 ? 'text-red-600' : 'text-amber-600'
+                      ticket.quantity === 0 ? 'text-red-600 dark:text-red-400' : 'text-amber-600 dark:text-amber-400'
                     }`}>
                       {ticket.quantity === 0 ? 'אזל!' : 'נמוך'}
                     </span>
                   </div>
-                  <p className="text-sm text-slate-600">
+                  <p className="text-sm text-foreground">
                     במלאי: {ticket.quantity} / סף: {ticket.min_threshold}
                   </p>
                 </div>
               ))}
             {tickets.filter(t => t.quantity <= t.min_threshold && t.is_active).length === 0 && (
-              <p className="text-slate-500 col-span-full text-center py-8">
+              <p className="text-muted-foreground col-span-full text-center py-8">
                 כל הפריטים במלאי תקין
               </p>
             )}

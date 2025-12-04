@@ -98,8 +98,8 @@ export default function Notifications() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-slate-800">התראות</h1>
-          <p className="text-slate-500">
+          <h1 className="text-2xl font-bold text-foreground">התראות</h1>
+          <p className="text-muted-foreground">
             {unreadCount > 0 ? `${unreadCount} התראות שלא נקראו` : 'אין התראות חדשות'}
           </p>
         </div>
@@ -127,7 +127,7 @@ export default function Notifications() {
                 transition={{ delay: index * 0.05 }}
               >
                 <Card className={`relative overflow-hidden ${
-                  !notification.is_read ? type.bgColor + ' ' + type.borderColor : 'bg-white'
+                  !notification.is_read ? type.bgColor + ' ' + type.borderColor : 'bg-card'
                 } ${!notification.is_read ? 'border-r-4' : ''}`}>
                   <CardContent className="p-4">
                     <div className="flex items-start gap-4">
@@ -145,23 +145,23 @@ export default function Notifications() {
                           )}
                         </div>
                         
-                        <h3 className="font-medium text-slate-800 mb-1">
+                        <h3 className="font-medium text-foreground mb-1">
                           {notification.ticket_name || 'התראת מערכת'}
                         </h3>
                         
                         {notification.notification_type === 'low_stock' && (
-                          <p className="text-sm text-slate-600">
+                          <p className="text-sm text-foreground">
                             המלאי ירד ל-{notification.current_quantity} יחידות (סף: {notification.threshold})
                           </p>
                         )}
                         
                         {notification.notification_type === 'out_of_stock' && (
-                          <p className="text-sm text-slate-600">
+                          <p className="text-sm text-foreground">
                             הכרטיס אזל מהמלאי
                           </p>
                         )}
                         
-                        <p className="text-xs text-slate-400 mt-2">
+                        <p className="text-xs text-muted-foreground mt-2">
                           {format(new Date(notification.created_date), "dd/MM/yyyy HH:mm", { locale: he })}
                         </p>
                       </div>
@@ -173,7 +173,7 @@ export default function Notifications() {
                             size="icon"
                             onClick={() => handleMarkAsRead(notification)}
                           >
-                            <Check className="h-4 w-4 text-slate-400" />
+                            <Check className="h-4 w-4 text-muted-foreground" />
                           </Button>
                         )}
                         <Button 
@@ -181,7 +181,7 @@ export default function Notifications() {
                           size="icon"
                           onClick={() => handleDelete(notification)}
                         >
-                          <Trash2 className="h-4 w-4 text-slate-400" />
+                          <Trash2 className="h-4 w-4 text-muted-foreground" />
                         </Button>
                       </div>
                     </div>
@@ -206,8 +206,8 @@ export default function Notifications() {
         {notifications.length === 0 && !isLoading && (
           <div className="text-center py-16">
             <Bell className="h-16 w-16 mx-auto mb-4 text-slate-200" />
-            <h3 className="text-lg font-medium text-slate-600 mb-2">אין התראות</h3>
-            <p className="text-slate-500">כל הפריטים במלאי תקין</p>
+            <h3 className="text-lg font-medium text-foreground mb-2">אין התראות</h3>
+            <p className="text-muted-foreground">כל הפריטים במלאי תקין</p>
           </div>
         )}
       </div>

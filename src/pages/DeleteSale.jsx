@@ -97,7 +97,7 @@ export default function DeleteSale() {
   if (isLoading) {
     return (
       <div className="flex items-center justify-center min-h-[400px]">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600"></div>
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
       </div>
     );
   }
@@ -105,7 +105,7 @@ export default function DeleteSale() {
   if (!sale) {
     return (
       <div className="text-center py-16">
-        <h2 className="text-xl font-bold text-slate-800 mb-2">העסקה לא נמצאה</h2>
+        <h2 className="text-xl font-bold text-foreground mb-2">העסקה לא נמצאה</h2>
         <Link to={createPageUrl("SalesHistory")}>
           <Button>חזרה להיסטוריית מכירות</Button>
         </Link>
@@ -125,7 +125,7 @@ export default function DeleteSale() {
         </Link>
         <div>
           <h1 className="text-2xl font-bold text-red-600">מחיקת עסקה</h1>
-          <p className="text-slate-500">פעולה זו אינה ניתנת לביטול</p>
+          <p className="text-muted-foreground">פעולה זו אינה ניתנת לביטול</p>
         </div>
       </div>
 
@@ -138,7 +138,7 @@ export default function DeleteSale() {
         </CardHeader>
         <CardContent className="space-y-6 pt-6">
           {/* Sale Summary */}
-          <div className="p-4 bg-slate-50 rounded-lg space-y-2">
+          <div className="p-4 bg-accent rounded-lg space-y-2">
             <p className="text-sm"><strong>תאריך:</strong> {format(new Date(sale.created_date), "dd/MM/yyyy HH:mm", { locale: he })}</p>
             <p className="text-sm"><strong>מוכר:</strong> {sale.seller_name}</p>
             <p className="text-sm"><strong>סכום:</strong> ₪{sale.total_amount?.toFixed(2)}</p>

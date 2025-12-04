@@ -8,7 +8,8 @@
     "build": "vite build",
     "lint": "eslint .",
     "preview": "vite preview",
-    "seed": "node scripts/seed-firebase.js"
+    "seed": "node scripts/seed-firebase.js",
+    "seed-pais": "node scripts/seed-pais-tickets.js"
   },
   "dependencies": {
     "@base44/sdk": "^0.1.2",

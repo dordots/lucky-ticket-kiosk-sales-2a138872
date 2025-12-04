@@ -9,7 +9,8 @@ export default function StatsCard({
   trend, 
   trendValue,
   color = "indigo",
-  delay = 0 
+  delay = 0,
+  description = null
 }) {
   const colorClasses = {
     indigo: {
@@ -41,10 +42,10 @@ export default function StatsCard({
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ delay }}
-      className="bg-white rounded-2xl p-6 shadow-sm hover:shadow-md transition-shadow"
+      className="bg-card rounded-2xl p-6 shadow-sm hover:shadow-md transition-shadow"
     >
       <div className="flex items-start justify-between mb-4">
-        <div className={`p-3 rounded-xl ${colors.icon}`}>
+        <div className="p-3 rounded-xl bg-primary/10 text-primary">
           <Icon className="h-6 w-6" />
         </div>
         {trend && (
@@ -61,8 +62,11 @@ export default function StatsCard({
         )}
       </div>
       
-      <h3 className="text-sm font-medium text-slate-500 mb-1">{title}</h3>
-      <p className="text-2xl font-bold text-slate-800">{value}</p>
+      <h3 className="text-sm font-medium text-muted-foreground mb-1">{title}</h3>
+      <p className="text-2xl font-bold text-foreground mb-1">{value}</p>
+      {description && (
+        <p className="text-xs text-muted-foreground mt-1">{description}</p>
+      )}
     </motion.div>
   );
 }

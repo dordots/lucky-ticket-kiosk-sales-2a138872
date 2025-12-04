@@ -151,7 +151,7 @@ export default function EditSale() {
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-6">
             {/* Read-only info */}
-            <div className="p-4 bg-slate-50 rounded-lg space-y-2">
+            <div className="p-4 bg-accent rounded-lg space-y-2">
               <p className="text-sm"><strong>מוכר:</strong> {sale.seller_name}</p>
               <p className="text-sm"><strong>סכום:</strong> ₪{sale.total_amount?.toFixed(2)}</p>
               <p className="text-sm"><strong>פריטים:</strong> {sale.items?.map(i => `${i.quantity}×${i.ticket_name}`).join(", ")}</p>
@@ -220,7 +220,7 @@ export default function EditSale() {
               <Button 
                 type="submit" 
                 disabled={updateMutation.isPending}
-                className="flex-1 bg-gradient-to-r from-indigo-500 to-purple-600"
+                className="flex-1 bg-theme-gradient"
               >
                 {updateMutation.isPending ? (
                   <Loader2 className="h-4 w-4 animate-spin" />
