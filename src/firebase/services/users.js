@@ -61,3 +61,34 @@ export const updateUser = async (userId, updateData) => {
   }
 };
 
+// Get count of active users
+export const getActiveUsersCount = async () => {
+  try {
+    const usersRef = collection(db, COLLECTION_NAME);
+    const querySnapshot = await getDocs(usersRef);
+    const activeUsers = querySnapshot.docs.filter(doc => {
+      const data = doc.data();
+      return data.is_active !== false; // Consider undefined/null as active
+    });
+    return activeUsers.length;
+  } catch (error) {
+    console.error('Error getting active users count:', error);
+    throw error;
+  }
+};
+
+// Check if user limit is reached
+export const checkUserLimit = async (maxUsers = 4) => {
+  try {
+    const activeCount = await getActiveUsersCount();
+    return {
+      isLimitReached: activeCount >= maxUsers,
+      currentCount: activeCount,
+      maxUsers: maxUsers
+    };
+  } catch (error) {
+    console.error('Error checking user limit:', error);
+    throw error;
+  }
+};
+

@@ -2,6 +2,7 @@ import React, { useState, useEffect } from "react";
 import { User, auth } from "@/api/entities";
 import { firebase } from "@/api/firebaseClient";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import * as usersService from "@/firebase/services/users";
 import { motion, AnimatePresence } from "framer-motion";
 import { 
   Plus, 
@@ -67,6 +68,8 @@ export default function UsersManagement() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [resetPasswordDialogOpen, setResetPasswordDialogOpen] = useState(false);
+  const [userLimitDialogOpen, setUserLimitDialogOpen] = useState(false);
+  const [userLimitInfo, setUserLimitInfo] = useState(null);
   const [selectedUser, setSelectedUser] = useState(null);
   const [formData, setFormData] = useState({
     email: "",
@@ -154,12 +157,21 @@ export default function UsersManagement() {
         }
       });
     } else {
-      // Create new user
+      // Create new user - check user limit first
       if (!formData.email || !formData.password || !formData.full_name) {
         alert('נא למלא את כל השדות הנדרשים');
         return;
       }
+      
       try {
+        // Check user limit before creating
+        const limitCheck = await usersService.checkUserLimit(4);
+        if (limitCheck.isLimitReached) {
+          setUserLimitInfo(limitCheck);
+          setUserLimitDialogOpen(true);
+          return;
+        }
+        
         await createMutation.mutateAsync({
           email: formData.email,
           password: formData.password,
@@ -194,8 +206,19 @@ export default function UsersManagement() {
           <p className="text-muted-foreground">ניהול זכיינים ועוזרי זכיין</p>
         </div>
         <Button 
-          onClick={() => {
+          onClick={async () => {
             resetForm();
+            // Check user limit before opening dialog
+            try {
+              const limitCheck = await usersService.checkUserLimit(4);
+              if (limitCheck.isLimitReached) {
+                setUserLimitInfo(limitCheck);
+                setUserLimitDialogOpen(true);
+                return;
+              }
+            } catch (error) {
+              console.error('Error checking user limit:', error);
+            }
             setDialogOpen(true);
           }}
           className="bg-theme-gradient"
@@ -461,6 +484,49 @@ export default function UsersManagement() {
               className="bg-primary hover:bg-primary/90"
             >
               שלח הודעת איפוס
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* User Limit Dialog */}
+      <AlertDialog open={userLimitDialogOpen} onOpenChange={setUserLimitDialogOpen}>
+        <AlertDialogContent dir="rtl">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2">
+              <ShieldAlert className="h-5 w-5 text-amber-500" />
+              הגעת למגבלת המשתמשים
+            </AlertDialogTitle>
+            <AlertDialogDescription className="space-y-3">
+              <p>
+                הגעת למגבלה של <strong>{userLimitInfo?.maxUsers || 4} משתמשים פעילים</strong>.
+              </p>
+              <p>
+                כרגע יש לך <strong>{userLimitInfo?.currentCount || 0} משתמשים פעילים</strong> במערכת.
+              </p>
+              <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg p-4 mt-4">
+                <p className="font-semibold text-amber-800 dark:text-amber-200 mb-2">
+                  כדי להוסיף משתמשים נוספים:
+                </p>
+                <ul className="list-disc list-inside space-y-1 text-amber-700 dark:text-amber-300 text-sm">
+                  <li>צור קשר עם התמיכה הטכנית</li>
+                  <li>בצע תשלום להסרת המגבלה</li>
+                  <li>קבל הרשאה למספר משתמשים בלתי מוגבל</li>
+                </ul>
+              </div>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>הבנתי</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                setUserLimitDialogOpen(false);
+                // כאן ניתן להוסיף קישור לעמוד תשלום או יצירת קשר
+                alert('לצורך הוספת משתמשים נוספים, אנא צור קשר עם התמיכה הטכנית.');
+              }}
+              className="bg-theme-gradient"
+            >
+              יצירת קשר
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

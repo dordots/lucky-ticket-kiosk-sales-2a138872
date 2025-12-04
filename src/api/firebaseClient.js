@@ -119,6 +119,9 @@ export const firebase = {
     },
     resetUserPassword: (email) => {
       return authService.resetUserPassword(email);
+    },
+    signInWithGoogle: () => {
+      return authService.signInWithGoogle();
     }
   }
 };

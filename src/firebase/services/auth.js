@@ -6,7 +6,9 @@ import {
   getAuth,
   updatePassword,
   reauthenticateWithCredential,
-  EmailAuthProvider
+  EmailAuthProvider,
+  signInWithPopup,
+  GoogleAuthProvider
 } from 'firebase/auth';
 import { doc, getDoc, setDoc, collection, getDocs, Timestamp } from 'firebase/firestore';
 import { auth, db } from '../config';
@@ -231,5 +233,43 @@ export const resetUserPassword = async (email) => {
 // Get auth instance
 export const getAuthInstance = () => {
   return getAuth();
+};
+
+// Sign in with Google
+export const signInWithGoogle = async () => {
+  try {
+    const provider = new GoogleAuthProvider();
+    const userCredential = await signInWithPopup(auth, provider);
+    const user = userCredential.user;
+    
+    // Store user ID in localStorage for compatibility
+    localStorage.setItem('currentUserId', user.uid);
+    
+    // Check if user exists in Firestore
+    const userDoc = await getDoc(doc(db, 'users', user.uid));
+    
+    if (!userDoc.exists()) {
+      // Create user document in Firestore if it doesn't exist (first time login)
+      const displayName = user.displayName || '';
+      const nameParts = displayName.split(' ');
+      const firstName = nameParts[0] || '';
+      const lastName = nameParts.slice(1).join(' ') || '';
+      
+      await setDoc(doc(db, 'users', user.uid), {
+        email: user.email,
+        full_name: displayName || user.email?.split('@')[0] || 'משתמש',
+        position: 'seller', // Default to seller, can be changed by owner
+        phone: user.phoneNumber || '',
+        is_active: true,
+        created_date: Timestamp.now(),
+        auth_provider: 'google' // Track that user signed in with Google
+      });
+    }
+    
+    return await getCurrentUser();
+  } catch (error) {
+    console.error('Error signing in with Google:', error);
+    throw error;
+  }
 };
 
