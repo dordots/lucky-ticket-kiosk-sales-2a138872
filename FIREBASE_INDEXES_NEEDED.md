@@ -34,3 +34,4 @@ https://console.firebase.google.com/v1/r/project/lucky-ticket-kiosk/firestore/in
 - עד שה-index מוכן, השאילתות עלולות להיכשל
 - בדוק את הסטטוס ב-Firestore > Indexes
 
+
