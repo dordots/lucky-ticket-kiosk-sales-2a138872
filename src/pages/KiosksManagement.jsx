@@ -139,17 +139,18 @@ export default function KiosksManagement() {
       return;
     }
 
+    const payload = {
+      ...formData,
+      franchisee_id: formData.franchisee_id || null,
+    };
+
     if (selectedKiosk) {
       await updateMutation.mutateAsync({ 
         id: selectedKiosk.id, 
-        data: formData 
+        data: payload 
       });
     } else {
-      if (!formData.franchisee_id) {
-        alert('נא לבחור זכיין');
-        return;
-      }
-      await createMutation.mutateAsync(formData);
+      await createMutation.mutateAsync(payload);
     }
   };
 
@@ -265,10 +266,15 @@ export default function KiosksManagement() {
                           <span>{kiosk.location}</span>
                         </div>
                       )}
-                      {franchisee && (
+                      {franchisee ? (
                         <div className="flex items-center gap-2 text-foreground">
                           <User className="h-4 w-4 text-muted-foreground" />
                           <span>{franchisee.full_name || franchisee.email}</span>
+                        </div>
+                      ) : (
+                        <div className="flex items-center gap-2 text-muted-foreground text-sm">
+                          <User className="h-4 w-4" />
+                          <span>ללא זכיין</span>
                         </div>
                       )}
                     </div>
@@ -334,25 +340,33 @@ export default function KiosksManagement() {
               />
             </div>
 
-            <div className="space-y-2">
-              <Label>זכיין *</Label>
-              <Select
-                value={formData.franchisee_id}
-                onValueChange={(value) => setFormData({ ...formData, franchisee_id: value })}
-                disabled={!!selectedKiosk}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="בחר זכיין" />
-                </SelectTrigger>
-                <SelectContent>
-                  {franchisees.map((franchisee) => (
-                    <SelectItem key={franchisee.id} value={franchisee.id}>
-                      {franchisee.full_name || franchisee.email}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
+                    <div className="space-y-2">
+                      <Label>זכיין (לא חובה)</Label>
+                      <Select
+                        value={formData.franchisee_id}
+                        onValueChange={(value) => setFormData({ ...formData, franchisee_id: value === 'none' ? '' : value })}
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="בחר זכיין או השאר ריק" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="none">ללא זכיין</SelectItem>
+                          {franchisees
+                            .filter((franchisee) => {
+                              // exclude franchisees already assigned to another kiosk
+                              const assignedKiosk = kiosks.find(
+                                (k) => k.franchisee_id === franchisee.id && k.id !== selectedKiosk?.id
+                              );
+                              return !assignedKiosk;
+                            })
+                            .map((franchisee) => (
+                              <SelectItem key={franchisee.id} value={franchisee.id}>
+                                {franchisee.full_name || franchisee.email}
+                              </SelectItem>
+                            ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
 
             <div className="flex items-center justify-between">
               <Label>קיוסק פעיל</Label>
@@ -405,5 +419,8 @@ export default function KiosksManagement() {
     </div>
   );
 }
+
+
+
 
 

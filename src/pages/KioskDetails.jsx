@@ -291,3 +291,6 @@ export default function KioskDetails() {
 }
 
 
+
+
+

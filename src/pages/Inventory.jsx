@@ -231,10 +231,10 @@ export default function Inventory() {
       quantity: parseInt(formData.quantity) || 0,
       default_quantity_per_package: formData.default_quantity_per_package ? parseInt(formData.default_quantity_per_package) : null,
       min_threshold: parseInt(formData.min_threshold) || 10,
-      color: formData.use_image ? null : formData.color,
-      image_url: formData.use_image ? formData.image_url : null,
-      is_active: formData.is_active,
-      ticket_category: formData.ticket_category || "custom",
+        color: formData.use_image ? null : formData.color,
+        image_url: formData.use_image ? formData.image_url : null,
+        is_active: formData.is_active,
+        ticket_category: formData.ticket_category || "custom",
       kiosk_id: currentKiosk.id,
     };
 

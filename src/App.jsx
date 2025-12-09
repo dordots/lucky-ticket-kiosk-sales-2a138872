@@ -98,8 +98,8 @@ function App() {
   return (
     <>
       <KioskProvider>
-        <Pages />
-        <Toaster />
+      <Pages />
+      <Toaster />
       </KioskProvider>
     </>
   )

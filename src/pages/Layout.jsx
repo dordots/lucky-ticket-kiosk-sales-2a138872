@@ -100,11 +100,22 @@ export default function Layout({ children, currentPageName }) {
     { name: "משתמשים", icon: Users, page: "UsersManagement", roles: ['owner', 'franchisee'] },
     { name: "קיוסקים", icon: Store, page: "KiosksManagement", roles: ['system_manager'] },
     { name: "לוח בקרה - קיוסקים", icon: LayoutDashboard, page: "KiosksDashboard", roles: ['system_manager'] },
-    { name: "זכיינים", icon: ShieldAlert, page: "FranchiseesManagement", roles: ['system_manager'] },
+    { name: "יצירת משתמשים", icon: ShieldAlert, page: "FranchiseesManagement", roles: ['system_manager'] },
     { name: "דוחות", icon: BarChart3, page: "Reports", roles: ['owner', 'franchisee'] },
     { name: "יומן פעולות", icon: History, page: "AuditLog", roles: ['owner', 'franchisee'] },
     { name: "הגדרות", icon: Settings, page: "Settings", roles: ['all'] },
   ];
+
+  // System manager default landing page
+  useEffect(() => {
+    if (!isLoading && user?.role === 'system_manager') {
+      const path = location.pathname;
+      const shouldRedirect = path === '/' || path === '/Dashboard' || path === '/SellerPOS';
+      if (shouldRedirect) {
+        navigate('/KiosksDashboard', { replace: true });
+      }
+    }
+  }, [isLoading, user, location.pathname, navigate]);
 
   const filteredNavItems = navItems.filter(item => {
     if (!user) return false;
@@ -221,7 +232,8 @@ export default function Layout({ children, currentPageName }) {
                 <div className="flex-1 min-w-0">
                   <h1 className="text-xl font-bold text-foreground">כרטיסי מזל</h1>
                   <p className="text-xs text-muted-foreground">ניהול מכירות</p>
-                  {currentKiosk && !kioskLoading && (
+                  {/* Show kiosk label only for non-system-manager roles */}
+                  {currentKiosk && !kioskLoading && user?.role !== 'system_manager' && (
                     <div className="flex items-center gap-1 mt-1">
                       <Store className="h-3 w-3 text-muted-foreground" />
                       <p className="text-xs text-muted-foreground truncate">{currentKiosk.name}</p>

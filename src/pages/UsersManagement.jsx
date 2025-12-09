@@ -137,10 +137,9 @@ export default function UsersManagement() {
       // Determine role and position
       let role = data.role;
       let position = data.role === 'franchisee' ? 'owner' : 'seller';
+      // Force kiosk to franchisee's kiosk when franchisee creates assistants
       let kioskId = data.kiosk_id || null;
-      
-      // If franchisee is creating, use their kiosk
-      if (currentUser?.role === 'franchisee' && currentKiosk && !kioskId) {
+      if (currentUser?.role === 'franchisee' && currentKiosk) {
         kioskId = currentKiosk.id;
       }
       
@@ -180,6 +179,8 @@ export default function UsersManagement() {
     let defaultRole = "assistant";
     if (currentUser?.role === 'system_manager') {
       defaultRole = "franchisee"; // System managers can create franchisees
+    } else if (currentUser?.role === 'franchisee') {
+      defaultRole = "assistant"; // Franchisees create assistants
     }
     
     setFormData({
@@ -246,11 +247,11 @@ export default function UsersManagement() {
       try {
         // Check user limit before creating (only for assistants)
         if (formData.role === 'assistant') {
-          const limitCheck = await usersService.checkUserLimit(4);
-          if (limitCheck.isLimitReached) {
-            setUserLimitInfo(limitCheck);
-            setUserLimitDialogOpen(true);
-            return;
+        const limitCheck = await usersService.checkUserLimit(4);
+        if (limitCheck.isLimitReached) {
+          setUserLimitInfo(limitCheck);
+          setUserLimitDialogOpen(true);
+          return;
           }
         }
         
@@ -295,29 +296,29 @@ export default function UsersManagement() {
           </p>
         </div>
         {(currentUser?.role === 'system_manager' || currentUser?.role === 'franchisee') && (
-          <Button 
-            onClick={async () => {
-              resetForm();
+        <Button 
+          onClick={async () => {
+            resetForm();
               // Check user limit before opening dialog (only for assistants)
               if (formData.role === 'assistant' || (!currentUser?.role === 'system_manager' && currentUser?.role === 'franchisee')) {
-                try {
-                  const limitCheck = await usersService.checkUserLimit(4);
-                  if (limitCheck.isLimitReached) {
-                    setUserLimitInfo(limitCheck);
-                    setUserLimitDialogOpen(true);
-                    return;
-                  }
-                } catch (error) {
-                  console.error('Error checking user limit:', error);
-                }
+            try {
+              const limitCheck = await usersService.checkUserLimit(4);
+              if (limitCheck.isLimitReached) {
+                setUserLimitInfo(limitCheck);
+                setUserLimitDialogOpen(true);
+                return;
               }
-              setDialogOpen(true);
-            }}
-            className="bg-theme-gradient"
-          >
-            <Plus className="h-4 w-4 ml-2" />
-            הוסף משתמש חדש
-          </Button>
+            } catch (error) {
+              console.error('Error checking user limit:', error);
+                }
+            }
+            setDialogOpen(true);
+          }}
+          className="bg-theme-gradient"
+        >
+          <Plus className="h-4 w-4 ml-2" />
+          הוסף משתמש חדש
+        </Button>
         )}
       </div>
 
@@ -366,9 +367,9 @@ export default function UsersManagement() {
                         </div>
                       </div>
                       {(currentUser?.role === 'system_manager' || currentUser?.role === 'franchisee') && (
-                        <Button variant="ghost" size="icon" onClick={() => handleEdit(user)}>
-                          <Edit className="h-4 w-4 text-muted-foreground" />
-                        </Button>
+                      <Button variant="ghost" size="icon" onClick={() => handleEdit(user)}>
+                        <Edit className="h-4 w-4 text-muted-foreground" />
+                      </Button>
                       )}
                     </div>
 
@@ -495,9 +496,9 @@ export default function UsersManagement() {
 
               {/* Role selection - only for system managers */}
               {currentUser?.role === 'system_manager' && (
-                <div className="space-y-2">
-                  <Label>תפקיד</Label>
-                  <Select
+              <div className="space-y-2">
+                <Label>תפקיד</Label>
+                <Select
                     value={formData.role}
                     onValueChange={(value) => {
                       setFormData({ 
@@ -507,26 +508,26 @@ export default function UsersManagement() {
                       });
                     }}
                     disabled={!!selectedUser}
-                  >
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
                       <SelectItem value="franchisee">
-                        <div className="flex items-center gap-2">
-                          <ShieldAlert className="h-4 w-4" />
-                          <span>זכיין</span>
-                        </div>
-                      </SelectItem>
+                      <div className="flex items-center gap-2">
+                        <ShieldAlert className="h-4 w-4" />
+                        <span>זכיין</span>
+                      </div>
+                    </SelectItem>
                       <SelectItem value="assistant">
-                        <div className="flex items-center gap-2">
-                          <Shield className="h-4 w-4" />
-                          <span>עוזר זכיין</span>
-                        </div>
-                      </SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
+                      <div className="flex items-center gap-2">
+                        <Shield className="h-4 w-4" />
+                        <span>עוזר זכיין</span>
+                      </div>
+                    </SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
               )}
 
               {/* Kiosk selection - for assistants or when editing */}
@@ -536,6 +537,7 @@ export default function UsersManagement() {
                   <Select
                     value={formData.kiosk_id}
                     onValueChange={(value) => setFormData({ ...formData, kiosk_id: value })}
+                    disabled={currentUser?.role === 'franchisee'} // franchisee cannot change kiosk
                   >
                     <SelectTrigger>
                       <SelectValue placeholder="בחר קיוסק" />

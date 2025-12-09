@@ -99,7 +99,7 @@ export const createKiosk = async (kioskData) => {
     const newKiosk = {
       name: kioskData.name,
       location: kioskData.location || '',
-      franchisee_id: kioskData.franchisee_id,
+      franchisee_id: kioskData.franchisee_id || null,
       is_active: kioskData.is_active !== false,
       settings: kioskData.settings || {},
       created_date: Timestamp.now(),
@@ -122,6 +122,7 @@ export const updateKiosk = async (kioskId, updateData) => {
     const kioskRef = doc(db, COLLECTION_NAME, kioskId);
     await updateDoc(kioskRef, {
       ...updateData,
+      franchisee_id: updateData.franchisee_id || null,
       updated_date: Timestamp.now()
     });
     return await getKioskById(kioskId);
@@ -155,5 +156,8 @@ export const getActiveKiosksCount = async () => {
     throw error;
   }
 };
+
+
+
 
 

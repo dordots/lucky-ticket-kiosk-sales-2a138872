@@ -53,12 +53,13 @@ export default function FranchiseesManagement() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [resetPasswordDialogOpen, setResetPasswordDialogOpen] = useState(false);
-  const [selectedFranchisee, setSelectedFranchisee] = useState(null);
+  const [selectedUser, setSelectedUser] = useState(null);
   const [currentUser, setCurrentUser] = useState(null);
   const [formData, setFormData] = useState({
     email: "",
     full_name: "",
     password: "",
+    role: "franchisee",
     kiosk_id: "",
     is_active: true,
     phone: "",
@@ -71,9 +72,15 @@ export default function FranchiseesManagement() {
     auth.me().then(setCurrentUser).catch(console.error);
   }, []);
 
-  const { data: franchisees = [], isLoading } = useQuery({
+  const { data: franchisees = [], isLoading: franchiseesLoading } = useQuery({
     queryKey: ['franchisees-all'],
     queryFn: () => usersService.getUsersByRole('franchisee'),
+    enabled: currentUser?.role === 'system_manager',
+  });
+
+  const { data: assistants = [], isLoading: assistantsLoading } = useQuery({
+    queryKey: ['assistants-all'],
+    queryFn: () => usersService.getUsersByRole('assistant'),
     enabled: currentUser?.role === 'system_manager',
   });
 
@@ -87,16 +94,16 @@ export default function FranchiseesManagement() {
     mutationFn: async (data) => {
       await firebase.auth.createUser(data.email, data.password, {
         full_name: data.full_name,
-        role: 'franchisee',
-        position: 'owner',
+        role: data.role,
+        position: data.role === 'franchisee' ? 'owner' : 'assistant',
         kiosk_id: data.kiosk_id || null,
-        kiosk_ids: data.kiosk_id ? [data.kiosk_id] : [],
+        kiosk_ids: data.role === 'franchisee' && data.kiosk_id ? [data.kiosk_id] : [],
         phone: data.phone,
         is_active: data.is_active,
       });
       
-      // If kiosk_id is provided, update the kiosk with franchisee_id
-      if (data.kiosk_id) {
+      // If kiosk_id is provided and role is franchisee, update the kiosk with franchisee_id
+      if (data.kiosk_id && data.role === 'franchisee') {
         // Get the created user's UID
         const allUsers = await usersService.getAllUsers();
         const createdUser = allUsers.find(u => u.email === data.email);
@@ -109,11 +116,12 @@ export default function FranchiseesManagement() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['franchisees-all'] });
+      queryClient.invalidateQueries({ queryKey: ['assistants-all'] });
       queryClient.invalidateQueries({ queryKey: ['kiosks-for-franchisees'] });
       queryClient.invalidateQueries({ queryKey: ['kiosks-all'] });
       setDialogOpen(false);
       resetForm();
-      alert('זכיין נוצר בהצלחה!');
+      alert('משתמש נוצר בהצלחה!');
     },
   });
 
@@ -121,10 +129,11 @@ export default function FranchiseesManagement() {
     mutationFn: ({ id, data }) => usersService.updateUser(id, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['franchisees-all'] });
+      queryClient.invalidateQueries({ queryKey: ['assistants-all'] });
       queryClient.invalidateQueries({ queryKey: ['kiosks-for-franchisees'] });
       setDialogOpen(false);
       resetForm();
-      alert('זכיין עודכן בהצלחה!');
+      alert('משתמש עודכן בהצלחה!');
     },
   });
 
@@ -133,22 +142,26 @@ export default function FranchiseesManagement() {
       email: "",
       full_name: "",
       password: "",
+      role: "franchisee",
       kiosk_id: "",
       is_active: true,
       phone: "",
     });
-    setSelectedFranchisee(null);
+    setSelectedUser(null);
   };
 
-  const handleEdit = (franchisee) => {
-    setSelectedFranchisee(franchisee);
+  const getRoleLabel = (role) => role === 'assistant' ? 'עוזר זכיין' : 'זכיין';
+
+  const handleEdit = (user) => {
+    setSelectedUser(user);
     setFormData({
-      email: franchisee.email || "",
-      full_name: franchisee.full_name || "",
+      email: user.email || "",
+      full_name: user.full_name || "",
       password: "",
-      kiosk_id: franchisee.kiosk_id || "",
-      is_active: franchisee.is_active !== false,
-      phone: franchisee.phone || "",
+      role: user.role || "franchisee",
+      kiosk_id: user.kiosk_id || "",
+      is_active: user.is_active !== false,
+      phone: user.phone || "",
     });
     setDialogOpen(true);
   };
@@ -159,22 +172,27 @@ export default function FranchiseesManagement() {
       return;
     }
 
-    if (selectedFranchisee) {
-      // Update existing franchisee
+    if (selectedUser) {
+      // Update existing user
       await updateMutation.mutateAsync({ 
-        id: selectedFranchisee.id, 
+        id: selectedUser.id, 
         data: {
           full_name: formData.full_name,
           kiosk_id: formData.kiosk_id || null,
-          kiosk_ids: formData.kiosk_id ? [formData.kiosk_id] : [],
+          kiosk_ids: (formData.role === 'franchisee' && formData.kiosk_id) ? [formData.kiosk_id] : [],
           is_active: formData.is_active,
           phone: formData.phone,
         }
       });
     } else {
-      // Create new franchisee
+      // Create new user
       if (!formData.password) {
         alert('נא להזין סיסמה');
+        return;
+      }
+
+      if (formData.role === 'assistant' && !formData.kiosk_id) {
+        alert('עבור עוזר זכיין יש לבחור קיוסק');
         return;
       }
       
@@ -190,10 +208,12 @@ export default function FranchiseesManagement() {
     }
   };
 
-  const filteredFranchisees = franchisees.filter(f => 
-    f.full_name?.includes(searchTerm) || 
-    f.email?.includes(searchTerm) ||
-    f.phone?.includes(searchTerm)
+  const users = [...franchisees, ...assistants];
+
+  const filteredUsers = users.filter(u => 
+    u.full_name?.includes(searchTerm) || 
+    u.email?.includes(searchTerm) ||
+    u.phone?.includes(searchTerm)
   );
 
   // Check if user is system manager
@@ -210,8 +230,8 @@ export default function FranchiseesManagement() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-foreground">ניהול זכיינים</h1>
-          <p className="text-muted-foreground">יצירה וניהול זכיינים במערכת</p>
+          <h1 className="text-2xl font-bold text-foreground">יצירת משתמשים</h1>
+          <p className="text-muted-foreground">יצירה וניהול זכיינים ועוזרי זכיינים במערכת</p>
         </div>
         <Button 
           onClick={() => {
@@ -221,7 +241,7 @@ export default function FranchiseesManagement() {
           className="bg-theme-gradient"
         >
           <Plus className="h-4 w-4 ml-2" />
-          הוסף זכיין חדש
+          הוסף משתמש חדש
         </Button>
       </div>
 
@@ -236,16 +256,16 @@ export default function FranchiseesManagement() {
         />
       </div>
 
-      {/* Franchisees Grid */}
+      {/* Users Grid */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
         <AnimatePresence>
-          {filteredFranchisees.map((franchisee, index) => {
-            const kiosk = kiosks.find(k => k.id === franchisee.kiosk_id);
-            const isActive = franchisee.is_active !== false;
+          {filteredUsers.map((user, index) => {
+            const kiosk = kiosks.find(k => k.id === user.kiosk_id);
+            const isActive = user.is_active !== false;
             
             return (
               <motion.div
-                key={franchisee.id}
+                key={user.id}
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, scale: 0.9 }}
@@ -256,19 +276,19 @@ export default function FranchiseesManagement() {
                     <div className="flex items-start justify-between mb-4">
                       <div className="flex items-center gap-3">
                         <div className="w-12 h-12 rounded-full bg-gradient-to-br from-purple-400 to-purple-600 flex items-center justify-center text-white font-bold text-lg">
-                          {(franchisee.full_name || franchisee.email || 'Z').charAt(0).toUpperCase()}
+                          {(user.full_name || user.email || 'Z').charAt(0).toUpperCase()}
                         </div>
                         <div>
                           <h3 className="font-bold text-foreground">
-                            {franchisee.full_name || 'ללא שם'}
+                            {user.full_name || 'ללא שם'}
                           </h3>
-                          <Badge className="bg-purple-100 text-purple-700">
+                          <Badge className={user.role === 'franchisee' ? "bg-purple-100 text-purple-700" : "bg-blue-100 text-blue-700"}>
                             <ShieldAlert className="h-3 w-3 ml-1" />
-                            זכיין
+                            {user.role === 'franchisee' ? 'זכיין' : 'עוזר זכיין'}
                           </Badge>
                         </div>
                       </div>
-                      <Button variant="ghost" size="icon" onClick={() => handleEdit(franchisee)}>
+                      <Button variant="ghost" size="icon" onClick={() => handleEdit(user)}>
                         <Edit className="h-4 w-4 text-muted-foreground" />
                       </Button>
                     </div>
@@ -276,12 +296,12 @@ export default function FranchiseesManagement() {
                     <div className="space-y-2 text-sm">
                       <div className="flex items-center gap-2 text-foreground">
                         <Mail className="h-4 w-4 text-muted-foreground" />
-                        <span className="truncate">{franchisee.email}</span>
+                        <span className="truncate">{user.email}</span>
                       </div>
-                      {franchisee.phone && (
+                      {user.phone && (
                         <div className="flex items-center gap-2 text-foreground">
                           <Phone className="h-4 w-4 text-muted-foreground" />
-                          <span>{franchisee.phone}</span>
+                          <span>{user.phone}</span>
                         </div>
                       )}
                       {kiosk && (
@@ -307,15 +327,15 @@ export default function FranchiseesManagement() {
         </AnimatePresence>
       </div>
 
-      {filteredFranchisees.length === 0 && !isLoading && (
+      {filteredUsers.length === 0 && !franchiseesLoading && !assistantsLoading && (
         <div className="text-center py-12 text-muted-foreground">
           <UserIcon className="h-12 w-12 mx-auto mb-4 opacity-30" />
-          <p className="font-medium">לא נמצאו זכיינים</p>
-          <p className="text-sm text-muted-foreground mt-1">הוסף זכיין חדש כדי להתחיל</p>
+          <p className="font-medium">לא נמצאו משתמשים</p>
+          <p className="text-sm text-muted-foreground mt-1">הוסף משתמש חדש כדי להתחיל</p>
         </div>
       )}
 
-      {isLoading && (
+      {(franchiseesLoading || assistantsLoading) && (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
           {[1, 2, 3].map((i) => (
             <Card key={i} className="animate-pulse">
@@ -338,20 +358,20 @@ export default function FranchiseesManagement() {
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
         <DialogContent className="sm:max-w-md" dir="rtl">
           <DialogHeader>
-            <DialogTitle>{selectedFranchisee ? "עריכת זכיין" : "הוספת זכיין חדש"}</DialogTitle>
+            <DialogTitle>{selectedUser ? "עריכת משתמש" : "הוספת משתמש חדש"}</DialogTitle>
           </DialogHeader>
 
           <div className="space-y-4 py-4">
-            {selectedFranchisee ? (
+            {selectedUser ? (
               <div className="flex items-center gap-3 p-4 bg-accent rounded-xl">
                 <div className="w-12 h-12 rounded-full bg-gradient-to-br from-purple-400 to-purple-600 flex items-center justify-center text-white font-bold text-lg">
-                  {(selectedFranchisee.full_name || selectedFranchisee.email || 'Z').charAt(0).toUpperCase()}
+                  {(selectedUser.full_name || selectedUser.email || 'Z').charAt(0).toUpperCase()}
                 </div>
                 <div className="flex-1">
                   <h3 className="font-bold text-foreground">
-                    {selectedFranchisee.full_name || 'ללא שם'}
+                    {selectedUser.full_name || 'ללא שם'}
                   </h3>
-                  <p className="text-sm text-muted-foreground">{selectedFranchisee.email}</p>
+                  <p className="text-sm text-muted-foreground">{selectedUser.email}</p>
                 </div>
                 <Button
                   variant="outline"
@@ -366,11 +386,27 @@ export default function FranchiseesManagement() {
             ) : (
               <>
                 <div className="space-y-2">
+                  <Label>תפקיד *</Label>
+                  <Select
+                    value={formData.role}
+                    onValueChange={(value) => setFormData({ ...formData, role: value })}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="בחר תפקיד" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="franchisee">זכיין</SelectItem>
+                      <SelectItem value="assistant">עוזר זכיין</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="space-y-2">
                   <Label>שם מלא *</Label>
                   <Input
                     value={formData.full_name}
                     onChange={(e) => setFormData({ ...formData, full_name: e.target.value })}
-                    placeholder="שם הזכיין"
+                    placeholder={`שם ${getRoleLabel(formData.role)}`}
                     required
                   />
                 </div>
@@ -401,7 +437,7 @@ export default function FranchiseesManagement() {
             )}
 
             <div className="space-y-2">
-              <Label>קיוסק</Label>
+              <Label>קיוסק {formData.role === 'assistant' ? '(חובה לעוזר זכיין)' : ''}</Label>
               <Select
                 value={formData.kiosk_id || "none"}
                 onValueChange={(value) => setFormData({ ...formData, kiosk_id: value === "none" ? "" : value })}
@@ -411,11 +447,13 @@ export default function FranchiseesManagement() {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="none">ללא קיוסק</SelectItem>
-                  {kiosks.filter(k => !k.franchisee_id || k.franchisee_id === selectedFranchisee?.id).map((kiosk) => (
-                    <SelectItem key={kiosk.id} value={kiosk.id}>
-                      {kiosk.name} {kiosk.location ? `- ${kiosk.location}` : ''}
-                    </SelectItem>
-                  ))}
+                  {kiosks
+                    .filter(k => !k.franchisee_id || k.franchisee_id === selectedUser?.id)
+                    .map((kiosk) => (
+                      <SelectItem key={kiosk.id} value={kiosk.id}>
+                        {kiosk.name} {kiosk.location ? `- ${kiosk.location}` : ''}
+                      </SelectItem>
+                    ))}
                 </SelectContent>
               </Select>
             </div>
@@ -430,7 +468,7 @@ export default function FranchiseesManagement() {
             </div>
 
             <div className="flex items-center justify-between">
-              <Label>זכיין פעיל</Label>
+              <Label>{`${getRoleLabel(formData.role)} פעיל`}</Label>
               <Switch
                 checked={formData.is_active}
                 onCheckedChange={(checked) => setFormData({ ...formData, is_active: checked })}
@@ -447,7 +485,7 @@ export default function FranchiseesManagement() {
               className="bg-theme-gradient"
               disabled={createMutation.isPending || updateMutation.isPending}
             >
-              {selectedFranchisee ? "עדכן" : "צור"}
+              {selectedUser ? "עדכן" : "צור"}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -459,10 +497,10 @@ export default function FranchiseesManagement() {
           <AlertDialogHeader>
             <AlertDialogTitle>איפוס סיסמה</AlertDialogTitle>
             <AlertDialogDescription>
-              האם אתה בטוח שברצונך לאפס את הסיסמה של {selectedFranchisee?.full_name || selectedFranchisee?.email}?
+              האם אתה בטוח שברצונך לאפס את הסיסמה של {selectedUser?.full_name || selectedUser?.email}?
               <br />
               <br />
-              הודעת איפוס סיסמה תישלח לכתובת האימייל: <strong>{selectedFranchisee?.email}</strong>
+              הודעת איפוס סיסמה תישלח לכתובת האימייל: <strong>{selectedUser?.email}</strong>
               <br />
               המשתמש יוכל ליצור סיסמה חדשה דרך הקישור בהודעה.
             </AlertDialogDescription>
@@ -472,7 +510,7 @@ export default function FranchiseesManagement() {
             <AlertDialogAction
               onClick={async () => {
                 try {
-                  await firebase.auth.resetUserPassword(selectedFranchisee?.email);
+                  await firebase.auth.resetUserPassword(selectedUser?.email);
                   alert('הודעת איפוס סיסמה נשלחה בהצלחה לכתובת האימייל');
                   setResetPasswordDialogOpen(false);
                 } catch (error) {

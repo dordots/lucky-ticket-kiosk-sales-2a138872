@@ -174,7 +174,8 @@ export const KioskProvider = ({ children }) => {
     selectKiosk,
     refreshKiosks,
     user,
-    canSelectKiosk: user?.role === 'system_manager' || (user?.role === 'franchisee' && allKiosks.length > 1)
+    // System manager לא צריך סלקטור קיוסק במסכים שלו; רק זכיין עם כמה קיוסקים
+    canSelectKiosk: user?.role === 'franchisee' && allKiosks.length > 1
   };
 
   return (
