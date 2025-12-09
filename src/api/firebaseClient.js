@@ -58,6 +58,9 @@ export const firebase = {
       },
       update: (id, data) => {
         return usersService.updateUser(id, data);
+      },
+      delete: (id) => {
+        return usersService.deleteUserDoc(id);
       }
     },
     AuditLog: {

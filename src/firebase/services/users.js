@@ -4,6 +4,7 @@ import {
   getDocs, 
   getDoc, 
   updateDoc, 
+  deleteDoc,
   query, 
   where,
   Timestamp 
@@ -77,10 +78,35 @@ export const getActiveUsersCount = async () => {
   }
 };
 
-// Check if user limit is reached
-export const checkUserLimit = async (maxUsers = 4) => {
+// Get count of active users by kiosk
+export const getActiveUsersCountByKiosk = async (kioskId) => {
   try {
-    const activeCount = await getActiveUsersCount();
+    if (!kioskId) {
+      return 0;
+    }
+    const usersRef = collection(db, COLLECTION_NAME);
+    const q = query(usersRef, where('kiosk_id', '==', kioskId));
+    const querySnapshot = await getDocs(q);
+    const activeUsers = querySnapshot.docs.filter(doc => {
+      const data = doc.data();
+      return data.is_active !== false; // Consider undefined/null as active
+    });
+    return activeUsers.length;
+  } catch (error) {
+    console.error('Error getting active users count by kiosk:', error);
+    throw error;
+  }
+};
+
+// Check if user limit is reached for a specific kiosk
+export const checkUserLimit = async (maxUsers = 4, kioskId = null) => {
+  try {
+    let activeCount;
+    if (kioskId) {
+      activeCount = await getActiveUsersCountByKiosk(kioskId);
+    } else {
+      activeCount = await getActiveUsersCount();
+    }
     return {
       isLimitReached: activeCount >= maxUsers,
       currentCount: activeCount,
@@ -120,6 +146,18 @@ export const getUsersByRole = async (role) => {
     }));
   } catch (error) {
     console.error('Error getting users by role:', error);
+    throw error;
+  }
+};
+
+// Delete user document
+export const deleteUserDoc = async (userId) => {
+  try {
+    const userRef = doc(db, COLLECTION_NAME, userId);
+    await deleteDoc(userRef);
+    return true;
+  } catch (error) {
+    console.error('Error deleting user:', error);
     throw error;
   }
 };

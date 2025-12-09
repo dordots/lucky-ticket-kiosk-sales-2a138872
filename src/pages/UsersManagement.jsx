@@ -11,7 +11,6 @@ import {
   Search, 
   User as UserIcon,
   Edit, 
-  Trash2,
   Shield,
   ShieldAlert,
   Mail,
@@ -132,6 +131,7 @@ export default function UsersManagement() {
     if (!perm) return true;
     return Array.isArray(currentUser.permissions) ? currentUser.permissions.includes(perm) : false;
   };
+
   const { currentKiosk } = useKiosk();
   const [formData, setFormData] = useState({
     email: "",
@@ -200,15 +200,21 @@ export default function UsersManagement() {
       }
       
       // Create user in Firebase Authentication and Firestore
-      await firebase.auth.createUser(data.email, data.password, {
+      const userData = {
         full_name: data.full_name,
         role: role,
         position: position,
         kiosk_id: kioskId,
         phone: data.phone,
         is_active: data.is_active,
-        permissions: role === 'assistant' ? (data.permissions || DEFAULT_ASSISTANT_PERMISSIONS) : undefined,
-      });
+      };
+      
+      // Add permissions for assistants
+      if (role === 'assistant') {
+        userData.permissions = ensureBasePerms(data.permissions || DEFAULT_ASSISTANT_PERMISSIONS);
+      }
+      
+      await firebase.auth.createUser(data.email, data.password, userData);
     },
     onSuccess: (result) => {
       queryClient.invalidateQueries({ queryKey: ['users-all'] });
@@ -325,11 +331,12 @@ export default function UsersManagement() {
       try {
         // Check user limit before creating (only for assistants)
         if (formData.role === 'assistant') {
-        const limitCheck = await usersService.checkUserLimit(4);
-        if (limitCheck.isLimitReached) {
-          setUserLimitInfo(limitCheck);
-          setUserLimitDialogOpen(true);
-          return;
+          const kioskId = formData.kiosk_id || currentKiosk?.id;
+          const limitCheck = await usersService.checkUserLimit(4, kioskId);
+          if (limitCheck.isLimitReached) {
+            setUserLimitInfo(limitCheck);
+            setUserLimitDialogOpen(true);
+            return;
           }
         }
         
@@ -390,7 +397,8 @@ export default function UsersManagement() {
               // Check user limit before opening dialog (only for assistants)
               if (formData.role === 'assistant' || (!currentUser?.role === 'system_manager' && currentUser?.role === 'franchisee')) {
             try {
-              const limitCheck = await usersService.checkUserLimit(4);
+              const kioskId = currentKiosk?.id;
+              const limitCheck = await usersService.checkUserLimit(4, kioskId);
               if (limitCheck.isLimitReached) {
                 setUserLimitInfo(limitCheck);
                 setUserLimitDialogOpen(true);
@@ -458,9 +466,9 @@ export default function UsersManagement() {
                         </div>
                       </div>
                       {(currentUser?.role === 'system_manager' || currentUser?.role === 'franchisee') && (
-                      <Button variant="ghost" size="icon" onClick={() => handleEdit(user)}>
-                        <Edit className="h-4 w-4 text-muted-foreground" />
-                      </Button>
+                        <Button variant="ghost" size="icon" onClick={() => handleEdit(user)}>
+                          <Edit className="h-4 w-4 text-muted-foreground" />
+                        </Button>
                       )}
                     </div>
 
@@ -707,7 +715,7 @@ export default function UsersManagement() {
               onClick={handleSubmit}
               className="bg-theme-gradient"
             >
-              עדכן
+          {selectedUser ? "עדכן" : "הוסף"}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -789,6 +797,7 @@ export default function UsersManagement() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
     </div>
   );
 }

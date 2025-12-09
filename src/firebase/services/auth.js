@@ -168,6 +168,7 @@ export const createUser = async (email, password, userData) => {
       kiosk_ids: userData.kiosk_ids || (role === 'franchisee' && userData.kiosk_id ? [userData.kiosk_id] : []),
       phone: userData.phone || '',
       is_active: userData.is_active !== false,
+      permissions: Array.isArray(userData.permissions) ? userData.permissions : (role === 'assistant' ? [] : []),
       created_date: Timestamp.now()
     });
     
@@ -184,6 +185,7 @@ export const createUser = async (email, password, userData) => {
     throw error;
   }
 };
+
 
 // Change password
 export const changePassword = async (currentPassword, newPassword) => {
