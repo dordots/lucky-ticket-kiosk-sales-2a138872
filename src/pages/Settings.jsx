@@ -85,8 +85,26 @@ export default function Settings() {
   const [theme, setTheme] = useState("indigo");
   const [colorScheme, setColorScheme] = useState("light");
   const [fontSize, setFontSize] = useState("medium");
+  const [user, setUser] = useState(null);
+  const hasPermission = (perm) => {
+    if (!user) return false;
+    if (user.role !== 'assistant') return true;
+    if (!perm) return true;
+    return Array.isArray(user.permissions) ? user.permissions.includes(perm) : false;
+  };
 
   useEffect(() => {
+    const loadUser = async () => {
+      try {
+        const { auth } = await import("@/api/entities");
+        const userData = await auth.me();
+        setUser(userData);
+      } catch (e) {
+        console.log("User not logged in");
+      }
+    };
+    loadUser();
+
     // Load saved preferences
     const savedTheme = localStorage.getItem("app-theme") || "indigo";
     const savedColorScheme = localStorage.getItem("app-color-scheme") || "light";
@@ -99,6 +117,15 @@ export default function Settings() {
     // Apply theme
     applyTheme(savedTheme, savedColorScheme, savedFontSize);
   }, []);
+
+  // Permission guard for assistants
+  if (user && user.role === 'assistant' && !hasPermission('settings_view')) {
+    return (
+      <div className="text-center py-12">
+        <p className="text-muted-foreground">אין לך הרשאה להגדרות</p>
+      </div>
+    );
+  }
 
   const applyTheme = (newTheme, newColorScheme, newFontSize) => {
     // Apply color theme

@@ -26,6 +26,12 @@ import SalesChart from "@/components/dashboard/SalesChart";
 
 export default function Dashboard() {
   const [user, setUser] = useState(null);
+  const hasPermission = (perm) => {
+    if (!user) return false;
+    if (user.role !== 'assistant') return true;
+    if (!perm) return true;
+    return Array.isArray(user.permissions) ? user.permissions.includes(perm) : false;
+  };
   const [salesPeriod, setSalesPeriod] = useState("week"); // day, week, month, year
   const { currentKiosk, isLoading: kioskLoading } = useKiosk();
 
@@ -113,6 +119,15 @@ export default function Dashboard() {
   };
 
   const isLoading = salesLoading || ticketsLoading;
+
+  // Permission guard for assistants
+  if (user && user.role === 'assistant' && !hasPermission('dashboard_view')) {
+    return (
+      <div className="text-center py-12">
+        <p className="text-muted-foreground">אין לך הרשאה לגשת ללוח הבקרה</p>
+      </div>
+    );
+  }
 
   if (isLoading) {
     return (

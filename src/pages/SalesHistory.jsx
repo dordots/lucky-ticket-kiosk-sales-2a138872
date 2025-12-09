@@ -65,6 +65,12 @@ const statusLabels = {
 
 export default function SalesHistory() {
   const [user, setUser] = useState(null);
+  const hasPermission = (perm) => {
+    if (!user) return false;
+    if (user.role !== 'assistant') return true;
+    if (!perm) return true;
+    return Array.isArray(user.permissions) ? user.permissions.includes(perm) : false;
+  };
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [paymentFilter, setPaymentFilter] = useState("all");
@@ -99,6 +105,15 @@ export default function SalesHistory() {
     },
     enabled: !kioskLoading && (!!currentKiosk || user?.role === 'system_manager'),
   });
+
+  // Permission guard for assistants
+  if (user && user.role === 'assistant' && !hasPermission('sales_history_view')) {
+    return (
+      <div className="text-center py-12">
+        <p className="text-muted-foreground">אין לך הרשאה לצפות בהיסטוריית המכירות</p>
+      </div>
+    );
+  }
 
   // Filter sales based on user role and filters
   const isOwner = user?.position === 'owner' || user?.role === 'admin';
@@ -180,7 +195,11 @@ export default function SalesHistory() {
             {isOwner ? 'כל העסקאות במערכת' : 'העסקאות שלך'}
           </p>
         </div>
-        <Button variant="outline" onClick={handleExportCSV}>
+        <Button 
+          variant="outline" 
+          onClick={handleExportCSV}
+          disabled={user?.role === 'assistant' && !hasPermission('sales_history_export')}
+        >
           <Download className="h-4 w-4 ml-2" />
           ייצוא CSV
         </Button>

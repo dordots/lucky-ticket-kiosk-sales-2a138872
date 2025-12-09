@@ -90,20 +90,26 @@ export default function Layout({ children, currentPageName }) {
   const isOwner = user?.position === 'owner' || user?.role === 'admin';
   const isSystemManager = user?.role === 'system_manager';
   const isFranchisee = user?.role === 'franchisee';
+  const hasPermission = (perm) => {
+    if (!user) return false;
+    if (user.role !== 'assistant') return true;
+    if (!perm) return true;
+    return Array.isArray(user.permissions) ? user.permissions.includes(perm) : perm === 'sell';
+  };
 
   const navItems = [
-    { name: "דף מכירה", icon: ShoppingCart, page: "SellerPOS", roles: ['all'] },
-    { name: "לוח בקרה", icon: LayoutDashboard, page: "Dashboard", roles: ['all', 'owner', 'franchisee'] },
-    { name: "מלאי", icon: Package, page: "Inventory", roles: ['owner', 'franchisee'] },
-    { name: "היסטוריית מכירות", icon: History, page: "SalesHistory", roles: ['all', 'franchisee'] },
-    { name: "פרטי קיוסק", icon: Store, page: "KioskDetails", roles: ['franchisee'] },
-    { name: "משתמשים", icon: Users, page: "UsersManagement", roles: ['owner', 'franchisee'] },
+    { name: "דף מכירה", icon: ShoppingCart, page: "SellerPOS", roles: ['all'], perm: "sell" },
+    { name: "לוח בקרה", icon: LayoutDashboard, page: "Dashboard", roles: ['all', 'owner', 'franchisee'], perm: "dashboard_view" },
+    { name: "מלאי", icon: Package, page: "Inventory", roles: ['owner', 'franchisee'], perm: "inventory_view" },
+    { name: "היסטוריית מכירות", icon: History, page: "SalesHistory", roles: ['all', 'franchisee'], perm: "sales_history_view" },
+    { name: "פרטי קיוסק", icon: Store, page: "KioskDetails", roles: ['franchisee'], perm: "kiosk_details_view" },
+    { name: "משתמשים", icon: Users, page: "UsersManagement", roles: ['owner', 'franchisee'], perm: "users_view" },
     { name: "קיוסקים", icon: Store, page: "KiosksManagement", roles: ['system_manager'] },
     { name: "לוח בקרה - קיוסקים", icon: LayoutDashboard, page: "KiosksDashboard", roles: ['system_manager'] },
     { name: "יצירת משתמשים", icon: ShieldAlert, page: "FranchiseesManagement", roles: ['system_manager'] },
-    { name: "דוחות", icon: BarChart3, page: "Reports", roles: ['owner', 'franchisee'] },
-    { name: "יומן פעולות", icon: History, page: "AuditLog", roles: ['owner', 'franchisee'] },
-    { name: "הגדרות", icon: Settings, page: "Settings", roles: ['all'] },
+    { name: "דוחות", icon: BarChart3, page: "Reports", roles: ['owner', 'franchisee'], perm: "reports_view" },
+    { name: "יומן פעולות", icon: History, page: "AuditLog", roles: ['owner', 'franchisee'], perm: "audit_log_view" },
+    { name: "הגדרות", icon: Settings, page: "Settings", roles: ['all'], perm: "settings_view" },
   ];
 
   // System manager default landing page
@@ -125,9 +131,13 @@ export default function Layout({ children, currentPageName }) {
       return item.roles.includes('system_manager') || item.page === 'Settings';
     }
     
-    // Assistants see only: SellerPOS, Settings
+    // Assistants see only allowed by permissions
     if (user.role === 'assistant') {
-      return item.page === 'SellerPOS' || item.page === 'Settings';
+      // Assistants should never see system_manager only items
+      if (item.roles.includes('system_manager') && !item.roles.some(r => r !== 'system_manager')) {
+        return false;
+      }
+      return hasPermission(item.perm);
     }
     
     // Franchisees see: SellerPOS, Dashboard, Inventory, SalesHistory, Users, Reports, AuditLog, Settings

@@ -32,6 +32,12 @@ import {
 
 export default function KioskDetails() {
   const [user, setUser] = useState(null);
+  const hasPermission = (perm) => {
+    if (!user) return false;
+    if (user.role !== 'assistant') return true;
+    if (!perm) return true;
+    return Array.isArray(user.permissions) ? user.permissions.includes(perm) : false;
+  };
   const [dialogOpen, setDialogOpen] = useState(false);
   const { currentKiosk, refreshKiosks } = useKiosk();
   const [formData, setFormData] = useState({
@@ -63,6 +69,15 @@ export default function KioskDetails() {
     },
     enabled: !!currentKiosk && (user?.role === 'franchisee' || user?.role === 'system_manager'),
   });
+
+  // Permission guard for assistants
+  if (user && user.role === 'assistant' && !hasPermission('kiosk_details_view')) {
+    return (
+      <div className="text-center py-12">
+        <p className="text-muted-foreground">אין לך הרשאה לצפות בפרטי הקיוסק</p>
+      </div>
+    );
+  }
 
   const updateMutation = useMutation({
     mutationFn: ({ id, data }) => kiosksService.updateKiosk(id, data),

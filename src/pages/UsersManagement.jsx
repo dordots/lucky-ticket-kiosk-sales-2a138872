@@ -68,6 +68,49 @@ const roleColors = {
   assistant: "bg-accent text-foreground",
 };
 
+const PERM_DEPENDENCIES = {
+  inventory_add: "inventory_view",
+  inventory_edit: "inventory_view",
+  inventory_delete: "inventory_view",
+  sales_history_export: "sales_history_view",
+  reports_export: "reports_view",
+};
+
+const ensureBasePerms = (perms = []) => {
+  const set = new Set(perms);
+  perms.forEach((p) => {
+    const base = PERM_DEPENDENCIES[p];
+    if (base) set.add(base);
+  });
+  return Array.from(set);
+};
+
+const ASSISTANT_PERMISSIONS = [
+  // POS
+  { key: "sell", label: "מכירה" },
+  // Dashboard
+  { key: "dashboard_view", label: "לוח בקרה - צפייה" },
+  // Inventory
+  { key: "inventory_view", label: "מלאי - צפייה" },
+  { key: "inventory_add", label: "מלאי - הוספת כרטיס" },
+  { key: "inventory_edit", label: "מלאי - עריכת כרטיס" },
+  { key: "inventory_delete", label: "מלאי - מחיקת כרטיס" },
+  // Sales history
+  { key: "sales_history_view", label: "היסטוריית מכירות - צפייה" },
+  { key: "sales_history_export", label: "היסטוריית מכירות - ייצוא CSV" },
+  // Reports
+  { key: "reports_view", label: "דוחות - צפייה" },
+  { key: "reports_export", label: "דוחות - ייצוא" },
+  // Audit log
+  { key: "audit_log_view", label: "יומן פעולות - צפייה" },
+  // Users
+  { key: "users_view", label: "ניהול משתמשים - צפייה" },
+  // Settings
+  { key: "settings_view", label: "הגדרות / עיצוב" },
+];
+
+const DEFAULT_ASSISTANT_PERMISSIONS = ["sell"];
+
 // Keep old position labels for backward compatibility
 const positionLabels = {
   owner: "זכיין",
@@ -83,6 +126,12 @@ export default function UsersManagement() {
   const [userLimitInfo, setUserLimitInfo] = useState(null);
   const [selectedUser, setSelectedUser] = useState(null);
   const [currentUser, setCurrentUser] = useState(null);
+  const hasPermission = (perm) => {
+    if (!currentUser) return false;
+    if (currentUser.role !== 'assistant') return true;
+    if (!perm) return true;
+    return Array.isArray(currentUser.permissions) ? currentUser.permissions.includes(perm) : false;
+  };
   const { currentKiosk } = useKiosk();
   const [formData, setFormData] = useState({
     email: "",
@@ -92,6 +141,7 @@ export default function UsersManagement() {
     kiosk_id: "",
     is_active: true,
     phone: "",
+    permissions: DEFAULT_ASSISTANT_PERMISSIONS,
   });
 
   const queryClient = useQueryClient();
@@ -128,8 +178,14 @@ export default function UsersManagement() {
     } else if (currentUser.role === 'franchisee' && currentKiosk) {
       // Franchisees see only users from their kiosk
       return allUsers.filter(u => u.kiosk_id === currentKiosk.id);
+    } else if (currentUser.role === 'assistant' && currentKiosk) {
+      // Assistants with users_view permission see only users from their kiosk
+      const hasUsersView = Array.isArray(currentUser.permissions) ? currentUser.permissions.includes('users_view') : false;
+      if (hasUsersView) {
+        return allUsers.filter(u => u.kiosk_id === currentKiosk.id);
+      }
     }
-    return []; // Assistants can't see users management
+    return []; // Assistants without permission can't see users management
   }, [allUsers, currentUser, currentKiosk]);
 
   const createMutation = useMutation({
@@ -151,6 +207,7 @@ export default function UsersManagement() {
         kiosk_id: kioskId,
         phone: data.phone,
         is_active: data.is_active,
+        permissions: role === 'assistant' ? (data.permissions || DEFAULT_ASSISTANT_PERMISSIONS) : undefined,
       });
     },
     onSuccess: (result) => {
@@ -191,11 +248,16 @@ export default function UsersManagement() {
       kiosk_id: currentKiosk?.id || "",
       is_active: true,
       phone: "",
+      permissions: defaultRole === 'assistant' ? ensureBasePerms(DEFAULT_ASSISTANT_PERMISSIONS) : [],
     });
     setSelectedUser(null);
   };
 
   const handleEdit = (user) => {
+    // Assistants can only view, not edit
+    if (currentUser?.role === 'assistant') {
+      return;
+    }
     setSelectedUser(user);
     setFormData({
       email: user.email || "",
@@ -205,11 +267,18 @@ export default function UsersManagement() {
       kiosk_id: user.kiosk_id || "",
       is_active: user.is_active !== false,
       phone: user.phone || "",
+      permissions: ensureBasePerms(user.permissions || DEFAULT_ASSISTANT_PERMISSIONS),
     });
     setDialogOpen(true);
   };
 
   const handleSubmit = async () => {
+    // Assistants can only view, not create or edit
+    if (currentUser?.role === 'assistant') {
+      alert('אין לך הרשאה ליצור או לערוך משתמשים');
+      return;
+    }
+    
     if (selectedUser) {
       // Update existing user
       const updateData = {
@@ -217,13 +286,22 @@ export default function UsersManagement() {
         phone: formData.phone,
         full_name: formData.full_name,
       };
-      
+      const permissionsSafe = ensureBasePerms(formData.permissions || DEFAULT_ASSISTANT_PERMISSIONS);
+
       // Only system managers can change role and kiosk
       if (currentUser?.role === 'system_manager') {
         updateData.role = formData.role;
         updateData.position = formData.role === 'franchisee' ? 'owner' : 'seller';
         if (formData.kiosk_id) {
           updateData.kiosk_id = formData.kiosk_id;
+        }
+        if (formData.role === 'assistant') {
+          updateData.permissions = permissionsSafe;
+        }
+      } else if (currentUser?.role === 'franchisee') {
+        // Franchisee can update assistant permissions for their kiosk
+        if (selectedUser?.role === 'assistant') {
+          updateData.permissions = permissionsSafe;
         }
       }
       
@@ -263,6 +341,7 @@ export default function UsersManagement() {
           kiosk_id: formData.kiosk_id,
           phone: formData.phone,
           is_active: formData.is_active,
+          permissions: formData.role === 'assistant' ? ensureBasePerms(formData.permissions || DEFAULT_ASSISTANT_PERMISSIONS) : [],
         });
       } catch (error) {
         if (error.code === 'auth/email-already-in-use') {
@@ -279,6 +358,15 @@ export default function UsersManagement() {
     u.email?.includes(searchTerm) ||
     u.phone?.includes(searchTerm)
   );
+
+  // Permission guard for assistants
+  if (currentUser && currentUser.role === 'assistant' && !hasPermission('users_view')) {
+    return (
+      <div className="text-center py-12">
+        <p className="text-muted-foreground">אין לך הרשאה לניהול משתמשים</p>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -319,6 +407,9 @@ export default function UsersManagement() {
           <Plus className="h-4 w-4 ml-2" />
           הוסף משתמש חדש
         </Button>
+        )}
+        {currentUser?.role === 'assistant' && hasPermission('users_view') && (
+          <p className="text-sm text-muted-foreground">צפייה בלבד - אין הרשאה ליצור או לערוך משתמשים</p>
         )}
       </div>
 
@@ -430,12 +521,12 @@ export default function UsersManagement() {
 
       {/* Edit/Create Dialog */}
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent className="sm:max-w-md" dir="rtl">
+        <DialogContent className="sm:max-w-md max-h-[90vh] flex flex-col" dir="rtl">
           <DialogHeader>
             <DialogTitle>{selectedUser ? "עריכת משתמש" : "הוספת משתמש חדש"}</DialogTitle>
           </DialogHeader>
 
-          <div className="space-y-4 py-4">
+          <div className="space-y-4 py-4 overflow-y-auto flex-1">
             {selectedUser ? (
               <div className="flex items-center gap-3 p-4 bg-accent rounded-xl">
                 <div className="w-12 h-12 rounded-full bg-gradient-to-br from-indigo-400 to-purple-500 flex items-center justify-center text-white font-bold text-lg">
@@ -550,6 +641,43 @@ export default function UsersManagement() {
                       ))}
                     </SelectContent>
                   </Select>
+                </div>
+              )}
+
+              {/* Permissions for assistants - franchisee or system manager */}
+              {(formData.role === 'assistant' || selectedUser?.role === 'assistant') && (
+                <div className="space-y-2">
+                  <Label>הרשאות עוזר זכיין</Label>
+                  <div className="max-h-64 overflow-auto rounded-md border border-border p-2">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                      {ASSISTANT_PERMISSIONS.map((perm) => (
+                        <label
+                          key={perm.key}
+                          className="flex items-center gap-2 rounded-md border border-border px-3 py-2 cursor-pointer"
+                        >
+                          <input
+                            type="checkbox"
+                            className="accent-primary"
+                            checked={formData.permissions?.includes(perm.key)}
+                            onChange={(e) => {
+                              const checked = e.target.checked;
+                              setFormData((prev) => {
+                                const currentPerms = prev.permissions || [];
+                                if (checked) {
+                                  return { ...prev, permissions: ensureBasePerms([...currentPerms, perm.key]) };
+                                }
+                                return { ...prev, permissions: currentPerms.filter((p) => p !== perm.key) };
+                              });
+                            }}
+                          />
+                          <span>{perm.label}</span>
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    ברירת מחדל: מכירה בלבד. זכיין יכול להוסיף הרשאות לעוזריו.
+                  </p>
                 </div>
               )}
 

@@ -39,6 +39,12 @@ export default function Reports() {
   const [reportPeriod, setReportPeriod] = useState("week");
   const { currentKiosk, isLoading: kioskLoading } = useKiosk();
   const [user, setUser] = useState(null);
+  const hasPermission = (perm) => {
+    if (!user) return false;
+    if (user.role !== 'assistant') return true;
+    if (!perm) return true;
+    return Array.isArray(user.permissions) ? user.permissions.includes(perm) : false;
+  };
 
   useEffect(() => {
     const loadUser = async () => {
@@ -65,6 +71,15 @@ export default function Reports() {
     },
     enabled: !kioskLoading && (!!currentKiosk || user?.role === 'system_manager'),
   });
+
+  // Permission guard for assistants
+  if (user && user.role === 'assistant' && !hasPermission('reports_view')) {
+    return (
+      <div className="text-center py-12">
+        <p className="text-muted-foreground">אין לך הרשאה לצפות בדוחות</p>
+      </div>
+    );
+  }
 
   const { data: tickets = [] } = useQuery({
     queryKey: ['tickets-reports', currentKiosk?.id],
@@ -177,6 +192,10 @@ export default function Reports() {
   const avgSale = totalSales > 0 ? totalRevenue / totalSales : 0;
 
   const handleExportReport = () => {
+    if (user?.role === 'assistant' && !hasPermission('reports_export')) {
+      alert('אין לך הרשאה לייצא דוחות');
+      return;
+    }
     // Helper function to escape CSV values
     const escapeCSV = (value) => {
       if (value === null || value === undefined) return '';

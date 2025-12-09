@@ -63,6 +63,12 @@ const colorOptions = [
 
 export default function Inventory() {
   const [user, setUser] = useState(null);
+  const hasPermission = (perm) => {
+    if (!user) return false;
+    if (user.role !== 'assistant') return true;
+    if (!perm) return true;
+    return Array.isArray(user.permissions) ? user.permissions.includes(perm) : false;
+  };
   const [searchTerm, setSearchTerm] = useState("");
   const [dialogOpen, setDialogOpen] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
@@ -178,6 +184,7 @@ export default function Inventory() {
   };
 
   const handleEdit = (ticket) => {
+    if (user?.role === 'assistant' && !hasPermission('inventory_edit')) return;
     setSelectedTicket(ticket);
     setFormData({
       name: ticket.name,
@@ -197,11 +204,20 @@ export default function Inventory() {
   };
 
   const handleDelete = (ticket) => {
+    if (user?.role === 'assistant' && !hasPermission('inventory_delete')) return;
     setSelectedTicket(ticket);
     setDeleteDialogOpen(true);
   };
 
   const handleSubmit = async () => {
+    // Permission gate: assistants need specific perms for add/edit
+    if (user?.role === 'assistant') {
+      const needed = selectedTicket ? 'inventory_edit' : 'inventory_add';
+      if (!hasPermission(needed)) {
+        alert('אין לך הרשאה לפעולה זו');
+        return;
+      }
+    }
     // Generate code automatically for new tickets
     let code = formData.code;
     if (!selectedTicket) {
@@ -340,6 +356,10 @@ export default function Inventory() {
   };
 
   const handleConfirmDelete = async () => {
+    if (user?.role === 'assistant' && !hasPermission('inventory_delete')) {
+      alert('אין לך הרשאה למחיקה');
+      return;
+    }
     if (selectedTicket) {
       // Create audit log before delete
       await AuditLog.create({
@@ -415,6 +435,15 @@ export default function Inventory() {
     });
   };
 
+  // Permission guard for assistants
+  if (user && user.role === 'assistant' && !hasPermission('inventory_view')) {
+    return (
+      <div className="text-center py-12">
+        <p className="text-muted-foreground">אין לך הרשאה לגשת לעמוד זה</p>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
 
@@ -427,6 +456,7 @@ export default function Inventory() {
         <Button 
           onClick={() => { resetForm(); setDialogOpen(true); }}
           className="bg-theme-gradient"
+          disabled={user?.role === 'assistant' && !hasPermission('inventory_add')}
         >
           <Plus className="h-4 w-4 ml-2" />
           הוסף סוג כרטיס
@@ -635,10 +665,20 @@ export default function Inventory() {
                         <p className="text-sm text-muted-foreground">{ticket.code}</p>
                       </div>
                       <div className="flex gap-1">
-                        <Button variant="ghost" size="icon" onClick={() => handleEdit(ticket)}>
+                        <Button 
+                          variant="ghost" 
+                          size="icon" 
+                          onClick={() => handleEdit(ticket)}
+                          disabled={user?.role === 'assistant' && !hasPermission('inventory_edit')}
+                        >
                           <Edit className="h-4 w-4 text-muted-foreground" />
                         </Button>
-                        <Button variant="ghost" size="icon" onClick={() => handleDelete(ticket)}>
+                        <Button 
+                          variant="ghost" 
+                          size="icon" 
+                          onClick={() => handleDelete(ticket)}
+                          disabled={user?.role === 'assistant' && !hasPermission('inventory_delete')}
+                        >
                           <Trash2 className="h-4 w-4 text-red-400" />
                         </Button>
                       </div>

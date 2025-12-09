@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { AuditLog as AuditLogService } from "@/api/entities";
 import { useQuery } from "@tanstack/react-query";
 import { format } from "date-fns";
@@ -191,6 +191,25 @@ const formatDetails = (details, actionType = null) => {
 export default function AuditLog() {
   const [expandedLogs, setExpandedLogs] = useState({});
   const [selectedLog, setSelectedLog] = useState(null);
+  const [user, setUser] = useState(null);
+  const hasPermission = (perm) => {
+    if (!user) return false;
+    if (user.role !== 'assistant') return true;
+    if (!perm) return true;
+    return Array.isArray(user.permissions) ? user.permissions.includes(perm) : false;
+  };
+  useEffect(() => {
+    const loadUser = async () => {
+      try {
+        const { auth } = await import("@/api/entities");
+        const userData = await auth.me();
+        setUser(userData);
+      } catch (e) {
+        console.log("User not logged in");
+      }
+    };
+    loadUser();
+  }, []);
   const { currentKiosk } = useKiosk();
 
   const { data: logs = [], isLoading } = useQuery({
@@ -203,6 +222,15 @@ export default function AuditLog() {
     },
     enabled: !!currentKiosk?.id,
   });
+
+  // Permission guard for assistants
+  if (user && user.role === 'assistant' && !hasPermission('audit_log_view')) {
+    return (
+      <div className="text-center py-12">
+        <p className="text-muted-foreground">אין לך הרשאה לצפות ביומן הפעולות</p>
+      </div>
+    );
+  }
 
   const toggleExpand = (logId) => {
     setExpandedLogs(prev => ({
