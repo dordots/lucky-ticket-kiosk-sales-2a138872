@@ -118,14 +118,7 @@ export default function Settings() {
     applyTheme(savedTheme, savedColorScheme, savedFontSize);
   }, []);
 
-  // Permission guard for assistants
-  if (user && user.role === 'assistant' && !hasPermission('settings_view')) {
-    return (
-      <div className="text-center py-12">
-        <p className="text-muted-foreground">אין לך הרשאה להגדרות</p>
-      </div>
-    );
-  }
+  // Assistants allowed by default; no granular permission check needed
 
   const applyTheme = (newTheme, newColorScheme, newFontSize) => {
     // Apply color theme

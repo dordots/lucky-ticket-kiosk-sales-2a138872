@@ -110,7 +110,7 @@ export default function Layout({ children, currentPageName }) {
     { name: "יצירת משתמשים", icon: ShieldAlert, page: "FranchiseesManagement", roles: ['system_manager'] },
     { name: "דוחות", icon: BarChart3, page: "Reports", roles: ['owner', 'franchisee'], perm: "reports_view" },
     { name: "יומן פעולות", icon: History, page: "AuditLog", roles: ['owner', 'franchisee'], perm: "audit_log_view" },
-    { name: "הגדרות", icon: Settings, page: "Settings", roles: ['all'], perm: "settings_view" },
+    { name: "הגדרות", icon: Settings, page: "Settings", roles: ['all'] },
   ];
 
   // System manager default landing page
@@ -126,23 +126,28 @@ export default function Layout({ children, currentPageName }) {
 
   // Handle post-refresh redirect after kiosk creation
   useEffect(() => {
-    if (isLoading) return;
+    if (isLoading || kioskLoading) return;
     const target = localStorage.getItem('afterReloadRedirect');
     if (target && currentKiosk) {
       localStorage.removeItem('afterReloadRedirect');
       navigate(target, { replace: true });
     }
-  }, [isLoading, currentKiosk, navigate]);
+  }, [isLoading, kioskLoading, currentKiosk, navigate]);
 
   // Franchisee without kiosk: force to kiosk creation
   useEffect(() => {
-    if (!isLoading && user?.role === 'franchisee' && !currentKiosk) {
+    if (isLoading || kioskLoading) return;
+    if (user?.role === 'franchisee') {
       const path = location.pathname;
-      if (path !== '/KioskSelfCreate') {
-        navigate('/KioskSelfCreate', { replace: true });
+      if (!currentKiosk) {
+        if (path !== '/KioskSelfCreate') {
+          navigate('/KioskSelfCreate', { replace: true });
+        }
+      } else if (path === '/KioskSelfCreate') {
+        navigate('/Dashboard', { replace: true });
       }
     }
-  }, [isLoading, user, currentKiosk, location.pathname, navigate]);
+  }, [isLoading, kioskLoading, user, currentKiosk, location.pathname, navigate]);
 
   const filteredNavItems = navItems.filter(item => {
     if (!user) return false;
@@ -158,6 +163,8 @@ export default function Layout({ children, currentPageName }) {
       if (item.roles.includes('system_manager') && !item.roles.some(r => r !== 'system_manager')) {
         return false;
       }
+      // Hide kiosk self-create page from assistants
+      if (item.page === 'KioskSelfCreate') return false;
       return hasPermission(item.perm);
     }
     

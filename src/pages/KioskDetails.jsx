@@ -86,7 +86,6 @@ export default function KioskDetails() {
       queryClient.invalidateQueries({ queryKey: ['kiosks-for-franchisees'] });
       refreshKiosks();
       setDialogOpen(false);
-      alert('פרטי הקיוסק עודכנו בהצלחה!');
     },
   });
 

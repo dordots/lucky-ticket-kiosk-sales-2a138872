@@ -121,7 +121,6 @@ export default function FranchiseesManagement() {
       queryClient.invalidateQueries({ queryKey: ['kiosks-all'] });
       setDialogOpen(false);
       resetForm();
-      alert('משתמש נוצר בהצלחה!');
     },
   });
 
@@ -133,7 +132,6 @@ export default function FranchiseesManagement() {
       queryClient.invalidateQueries({ queryKey: ['kiosks-for-franchisees'] });
       setDialogOpen(false);
       resetForm();
-      alert('משתמש עודכן בהצלחה!');
     },
   });
 
@@ -511,7 +509,6 @@ export default function FranchiseesManagement() {
               onClick={async () => {
                 try {
                   await firebase.auth.resetUserPassword(selectedUser?.email);
-                  alert('הודעת איפוס סיסמה נשלחה בהצלחה לכתובת האימייל');
                   setResetPasswordDialogOpen(false);
                 } catch (error) {
                   alert('שגיאה באיפוס סיסמה: ' + error.message);

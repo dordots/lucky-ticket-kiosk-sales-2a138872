@@ -36,8 +36,7 @@ export default function KioskSelfCreate() {
       } catch (err) {
         console.error("Error updating user with kiosk:", err);
       }
-      alert("קיוסק נוצר בהצלחה!");
-      // סימון לניווט אחרי ריענון, כדי שהקונטקסט יתעדכן ואז לעבור לדשבורד
+      // ריענון כדי שהקונטקסט יתעדכן והתפריט ייטען מחדש
       localStorage.setItem('afterReloadRedirect', '/Dashboard');
       window.location.reload();
     },

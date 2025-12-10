@@ -87,7 +87,6 @@ export default function KiosksManagement() {
       refreshKiosks();
       setDialogOpen(false);
       resetForm();
-      alert('קיוסק נוצר בהצלחה!');
     },
   });
 
@@ -98,7 +97,6 @@ export default function KiosksManagement() {
       refreshKiosks();
       setDialogOpen(false);
       resetForm();
-      alert('קיוסק עודכן בהצלחה!');
     },
   });
 
@@ -108,7 +106,6 @@ export default function KiosksManagement() {
       queryClient.invalidateQueries({ queryKey: ['kiosks-all'] });
       refreshKiosks();
       setDeleteDialogOpen(false);
-      alert('קיוסק נמחק בהצלחה!');
     },
   });
 
