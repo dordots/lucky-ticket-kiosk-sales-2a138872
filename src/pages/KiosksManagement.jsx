@@ -59,7 +59,7 @@ export default function KiosksManagement() {
     is_active: true,
   });
   const [currentUser, setCurrentUser] = useState(null);
-  const { refreshKiosks } = useKiosk();
+  const { refreshKiosks, currentKiosk } = useKiosk();
 
   const queryClient = useQueryClient();
 
@@ -71,7 +71,7 @@ export default function KiosksManagement() {
   const { data: kiosks = [], isLoading } = useQuery({
     queryKey: ['kiosks-all'],
     queryFn: () => kiosksService.getAllKiosks(),
-    enabled: currentUser?.role === 'system_manager',
+    enabled: currentUser?.role === 'system_manager' || currentUser?.role === 'franchisee',
   });
 
   const { data: franchisees = [] } = useQuery({
@@ -144,6 +144,11 @@ export default function KiosksManagement() {
       franchisee_id: formData.franchisee_id || null,
     };
 
+    // If franchisee is creating, force assign to themselves
+    if (currentUser?.role === 'franchisee') {
+      payload.franchisee_id = currentUser.id;
+    }
+
     if (selectedKiosk) {
       await updateMutation.mutateAsync({ 
         id: selectedKiosk.id, 
@@ -160,13 +165,26 @@ export default function KiosksManagement() {
     }
   };
 
-  const filteredKiosks = kiosks.filter(k => 
-    k.name?.includes(searchTerm) || 
-    k.location?.includes(searchTerm)
-  );
+  const filteredKiosks = kiosks
+    .filter(k => k.name?.includes(searchTerm) || k.location?.includes(searchTerm))
+    .filter(k => {
+      if (currentUser?.role === 'franchisee') {
+        return k.franchisee_id === currentUser.id;
+      }
+      return true;
+    });
 
-  // Check if user is system manager
-  if (currentUser?.role !== 'system_manager') {
+  // Franchisee access: only if they don't have a kiosk yet
+  if (currentUser?.role === 'franchisee') {
+    const hasKiosk = kiosks.some(k => k.franchisee_id === currentUser.id) || !!currentKiosk;
+    if (hasKiosk) {
+      return (
+        <div className="text-center py-12">
+          <p className="text-muted-foreground">כבר משויך לך קיוסק</p>
+        </div>
+      );
+    }
+  } else if (currentUser && currentUser.role !== 'system_manager') {
     return (
       <div className="text-center py-12">
         <p className="text-muted-foreground">אין לך הרשאה לגשת לדף זה</p>
@@ -250,12 +268,14 @@ export default function KiosksManagement() {
                         <Button variant="ghost" size="icon" onClick={() => handleEdit(kiosk)}>
                           <Edit className="h-4 w-4 text-muted-foreground" />
                         </Button>
-                        <Button variant="ghost" size="icon" onClick={() => {
-                          setSelectedKiosk(kiosk);
-                          setDeleteDialogOpen(true);
-                        }}>
-                          <Trash2 className="h-4 w-4 text-destructive" />
-                        </Button>
+                        {currentUser?.role === 'system_manager' && (
+                          <Button variant="ghost" size="icon" onClick={() => {
+                            setSelectedKiosk(kiosk);
+                            setDeleteDialogOpen(true);
+                          }}>
+                            <Trash2 className="h-4 w-4 text-destructive" />
+                          </Button>
+                        )}
                       </div>
                     </div>
 
@@ -341,31 +361,39 @@ export default function KiosksManagement() {
             </div>
 
                     <div className="space-y-2">
-                      <Label>זכיין (לא חובה)</Label>
-                      <Select
-                        value={formData.franchisee_id}
-                        onValueChange={(value) => setFormData({ ...formData, franchisee_id: value === 'none' ? '' : value })}
-                      >
-                        <SelectTrigger>
-                          <SelectValue placeholder="בחר זכיין או השאר ריק" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="none">ללא זכיין</SelectItem>
-                          {franchisees
-                            .filter((franchisee) => {
-                              // exclude franchisees already assigned to another kiosk
-                              const assignedKiosk = kiosks.find(
-                                (k) => k.franchisee_id === franchisee.id && k.id !== selectedKiosk?.id
-                              );
-                              return !assignedKiosk;
-                            })
-                            .map((franchisee) => (
-                              <SelectItem key={franchisee.id} value={franchisee.id}>
-                                {franchisee.full_name || franchisee.email}
-                              </SelectItem>
-                            ))}
-                        </SelectContent>
-                      </Select>
+                      {currentUser?.role === 'franchisee' ? (
+                        <div className="text-sm text-muted-foreground">
+                          הקיוסק ישויך אליך אוטומטית
+                        </div>
+                      ) : (
+                        <>
+                        <Label>זכיין (לא חובה)</Label>
+                        <Select
+                          value={formData.franchisee_id}
+                          onValueChange={(value) => setFormData({ ...formData, franchisee_id: value === 'none' ? '' : value })}
+                        >
+                          <SelectTrigger>
+                            <SelectValue placeholder="בחר זכיין או השאר ריק" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="none">ללא זכיין</SelectItem>
+                            {franchisees
+                              .filter((franchisee) => {
+                                // exclude franchisees already assigned to another kiosk
+                                const assignedKiosk = kiosks.find(
+                                  (k) => k.franchisee_id === franchisee.id && k.id !== selectedKiosk?.id
+                                );
+                                return !assignedKiosk;
+                              })
+                              .map((franchisee) => (
+                                <SelectItem key={franchisee.id} value={franchisee.id}>
+                                  {franchisee.full_name || franchisee.email}
+                                </SelectItem>
+                              ))}
+                          </SelectContent>
+                        </Select>
+                        </>
+                      )}
                     </div>
 
             <div className="flex items-center justify-between">
