@@ -32,6 +32,7 @@ import FranchiseesManagement from "./FranchiseesManagement";
 
 import KioskDetails from "./KioskDetails";
 
+import KioskSelfCreate from "./KioskSelfCreate";
 import Login from "./Login";
 
 import { BrowserRouter as Router, Route, Routes, useLocation } from 'react-router-dom';
@@ -69,6 +70,8 @@ const PAGES = {
     FranchiseesManagement: FranchiseesManagement,
     
     KioskDetails: KioskDetails,
+    
+    KioskSelfCreate: KioskSelfCreate,
     
 }
 
@@ -128,6 +131,8 @@ function PagesContent() {
                 <Route path="/FranchiseesManagement" element={<FranchiseesManagement />} />
                 
                 <Route path="/KioskDetails" element={<KioskDetails />} />
+                
+                <Route path="/KioskSelfCreate" element={<KioskSelfCreate />} />
                 
             </Routes>
         </Layout>

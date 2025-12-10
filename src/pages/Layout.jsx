@@ -104,7 +104,8 @@ export default function Layout({ children, currentPageName }) {
     { name: "היסטוריית מכירות", icon: History, page: "SalesHistory", roles: ['all', 'franchisee'], perm: "sales_history_view" },
     { name: "פרטי קיוסק", icon: Store, page: "KioskDetails", roles: ['franchisee'], perm: "kiosk_details_view" },
     { name: "משתמשים", icon: Users, page: "UsersManagement", roles: ['owner', 'franchisee'], perm: "users_view" },
-    { name: "קיוסקים", icon: Store, page: "KiosksManagement", roles: ['system_manager', 'franchisee'] },
+    { name: "קיוסקים", icon: Store, page: "KiosksManagement", roles: ['system_manager'] },
+    { name: "יצירת קיוסק", icon: Store, page: "KioskSelfCreate", roles: ['franchisee'] },
     { name: "לוח בקרה - קיוסקים", icon: LayoutDashboard, page: "KiosksDashboard", roles: ['system_manager'] },
     { name: "יצירת משתמשים", icon: ShieldAlert, page: "FranchiseesManagement", roles: ['system_manager'] },
     { name: "דוחות", icon: BarChart3, page: "Reports", roles: ['owner', 'franchisee'], perm: "reports_view" },
@@ -123,12 +124,22 @@ export default function Layout({ children, currentPageName }) {
     }
   }, [isLoading, user, location.pathname, navigate]);
 
+  // Handle post-refresh redirect after kiosk creation
+  useEffect(() => {
+    if (isLoading) return;
+    const target = localStorage.getItem('afterReloadRedirect');
+    if (target && currentKiosk) {
+      localStorage.removeItem('afterReloadRedirect');
+      navigate(target, { replace: true });
+    }
+  }, [isLoading, currentKiosk, navigate]);
+
   // Franchisee without kiosk: force to kiosk creation
   useEffect(() => {
     if (!isLoading && user?.role === 'franchisee' && !currentKiosk) {
       const path = location.pathname;
-      if (path !== '/KiosksManagement') {
-        navigate('/KiosksManagement', { replace: true });
+      if (path !== '/KioskSelfCreate') {
+        navigate('/KioskSelfCreate', { replace: true });
       }
     }
   }, [isLoading, user, currentKiosk, location.pathname, navigate]);
@@ -152,10 +163,12 @@ export default function Layout({ children, currentPageName }) {
     
     // Franchisees
     if (user.role === 'franchisee') {
-      // If no kiosk yet, show only kiosk creation
+      // If no kiosk yet, show only kiosk self-create
       if (!currentKiosk) {
-        return item.page === 'KiosksManagement';
+        return item.page === 'KioskSelfCreate';
       }
+      // If already has kiosk, hide self-create
+      if (item.page === 'KioskSelfCreate') return false;
       if (item.roles.includes('all')) return true;
       if (item.roles.includes('owner') || item.roles.includes('franchisee')) return true;
       return false;
