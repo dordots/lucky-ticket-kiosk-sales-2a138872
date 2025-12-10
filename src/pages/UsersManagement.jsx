@@ -104,8 +104,6 @@ const ASSISTANT_PERMISSIONS = [
   { key: "audit_log_view", label: "יומן פעולות - צפייה" },
   // Users
   { key: "users_view", label: "ניהול משתמשים - צפייה" },
-  // Settings
-  { key: "settings_view", label: "הגדרות / עיצוב" },
 ];
 
 const DEFAULT_ASSISTANT_PERMISSIONS = ["sell"];
@@ -221,7 +219,6 @@ export default function UsersManagement() {
       setDialogOpen(false);
       resetForm();
       // Show success message
-      alert('משתמש נוצר בהצלחה! המשתמש יכול להתחבר עם האימייל והסיסמה שניתנו.');
       // Note: The user will need to sign in again because createUser signs out
       // This is a limitation of Firebase Auth client SDK
     },
@@ -741,7 +738,6 @@ export default function UsersManagement() {
               onClick={async () => {
                 try {
                   await firebase.auth.resetUserPassword(selectedUser?.email);
-                  alert('הודעת איפוס סיסמה נשלחה בהצלחה לכתובת האימייל');
                   setResetPasswordDialogOpen(false);
                 } catch (error) {
                   alert('שגיאה באיפוס סיסמה: ' + error.message);
