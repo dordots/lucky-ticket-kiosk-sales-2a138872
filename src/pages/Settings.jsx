@@ -1,8 +1,11 @@
 import React, { useState, useEffect } from "react";
-import { Palette, Moon, Sun, Type } from "lucide-react";
+import { Palette, Moon, Sun, Type, DollarSign } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
+import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import { useQueryClient } from "@tanstack/react-query";
+import * as usersService from "@/firebase/services/users";
 import {
   Select,
   SelectContent,
@@ -86,6 +89,9 @@ export default function Settings() {
   const [colorScheme, setColorScheme] = useState("light");
   const [fontSize, setFontSize] = useState("medium");
   const [user, setUser] = useState(null);
+  const [commissionRate, setCommissionRate] = useState("");
+  const [isSavingCommission, setIsSavingCommission] = useState(false);
+  const queryClient = useQueryClient();
   const hasPermission = (perm) => {
     if (!user) return false;
     if (user.role !== 'assistant') return true;
@@ -99,6 +105,9 @@ export default function Settings() {
         const { auth } = await import("@/api/entities");
         const userData = await auth.me();
         setUser(userData);
+        if (userData?.commission_rate) {
+          setCommissionRate(userData.commission_rate.toString());
+        }
       } catch (e) {
         console.log("User not logged in");
       }
@@ -305,6 +314,99 @@ export default function Settings() {
           </div>
         </CardContent>
       </Card>
+
+      {/* Commission Rate (only for franchisees) */}
+      {user?.role === 'franchisee' && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <DollarSign className="h-5 w-5" />
+              עמלה
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="commission">גובה עמלה (אחוזים)</Label>
+                <Input
+                  id="commission"
+                  type="number"
+                  value={commissionRate}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    if (val === "" || (parseFloat(val) >= 0 && parseFloat(val) <= 100)) {
+                      setCommissionRate(val);
+                    }
+                  }}
+                  placeholder="לדוגמה: 15"
+                  min="0"
+                  max="100"
+                  className="text-lg"
+                />
+                <p className="text-xs text-muted-foreground">
+                  אם העמלה שלך היא 15%, תקבל 15% מכל מכירה. העמלה תשמש לחישוב הרווחים האישיים שלך בדוחות.
+                </p>
+                {user?.commission_rate && (
+                  <p className="text-sm text-muted-foreground">
+                    עמלה נוכחית: <strong>{user.commission_rate}%</strong>
+                  </p>
+                )}
+              </div>
+              <Button
+                onClick={async () => {
+                  if (!user?.id) {
+                    alert('לא ניתן לשמור ללא משתמש');
+                    return;
+                  }
+                  
+                  setIsSavingCommission(true);
+                  try {
+                    const updateData = {};
+                    if (commissionRate && commissionRate.trim() !== "") {
+                      const rate = parseFloat(commissionRate);
+                      if (rate >= 0 && rate <= 100) {
+                        updateData.commission_rate = rate;
+                        updateData.commission_set = true;
+                      } else {
+                        alert('העמלה חייבת להיות בין 0 ל-100');
+                        setIsSavingCommission(false);
+                        return;
+                      }
+                    } else {
+                      updateData.commission_rate = null;
+                      updateData.commission_set = false;
+                    }
+                    
+                    await usersService.updateUser(user.id, updateData);
+                    
+                    // Refresh user data
+                    const { auth } = await import("@/api/entities");
+                    const userData = await auth.me();
+                    setUser(userData);
+                    if (userData?.commission_rate) {
+                      setCommissionRate(userData.commission_rate.toString());
+                    } else {
+                      setCommissionRate("");
+                    }
+                    
+                    alert('העמלה נשמרה בהצלחה!');
+                    queryClient.invalidateQueries({ queryKey: ['reports'] });
+                  } catch (error) {
+                    console.error('Error saving commission:', error);
+                    alert('שגיאה בשמירת העמלה: ' + (error.message || 'שגיאה לא ידועה'));
+                  } finally {
+                    setIsSavingCommission(false);
+                  }
+                }}
+                disabled={isSavingCommission}
+                className="bg-theme-gradient"
+              >
+                {isSavingCommission ? 'שומר...' : 'שמור עמלה'}
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Reset Button */}
       <Card>

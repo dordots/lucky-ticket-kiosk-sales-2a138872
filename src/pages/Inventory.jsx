@@ -94,6 +94,7 @@ export default function Inventory() {
   const [transferFormData, setTransferFormData] = useState({
     ticketId: "",
     quantity: "",
+    is_opened: false,
   });
   const [packagesDialogOpen, setPackagesDialogOpen] = useState(false);
   const [packagesFormData, setPackagesFormData] = useState({
@@ -102,6 +103,7 @@ export default function Inventory() {
     packages: "",
     destination: "counter", // "counter" or "vault"
     defaultQuantityPerPackage: null,
+    is_opened: false, // Whether the tickets are opened (only for counter)
   });
   const [categoryFilter, setCategoryFilter] = useState("all");
   const [advancedFilters, setAdvancedFilters] = useState({
@@ -709,6 +711,7 @@ export default function Inventory() {
                               packages: "",
                               destination: "counter",
                               defaultQuantityPerPackage: ticket.default_quantity_per_package || null,
+                              is_opened: false,
                             });
                             setPackagesDialogOpen(true);
                           }}
@@ -723,7 +726,7 @@ export default function Inventory() {
                             variant="ghost" 
                             size="icon" 
                             onClick={() => {
-                              setTransferFormData({ ticketId: ticket.id, quantity: "" });
+                              setTransferFormData({ ticketId: ticket.id, quantity: "", is_opened: false });
                               setTransferDialogOpen(true);
                             }}
                             disabled={user?.role === 'assistant' && !hasPermission('inventory_edit')}
@@ -761,9 +764,57 @@ export default function Inventory() {
                     {/* Needs Opening Indicator */}
                     {needsOpening && (
                       <div className="mb-2 p-2 bg-orange-100 dark:bg-orange-900/30 rounded-lg border border-orange-300 dark:border-orange-700">
-                        <div className="flex items-center gap-2 text-orange-700 dark:text-orange-300">
-                          <AlertTriangle className="h-4 w-4" />
-                          <span className="text-xs font-medium">צריך לפתוח את הכרטיסים</span>
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-2 text-orange-700 dark:text-orange-300">
+                            <AlertTriangle className="h-4 w-4" />
+                            <span className="text-xs font-medium">צריך לפתוח את הכרטיסים</span>
+                          </div>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="h-7 text-xs bg-white dark:bg-gray-800 border-orange-300 dark:border-orange-700 text-orange-700 dark:text-orange-300 hover:bg-orange-200 dark:hover:bg-orange-900/50"
+                            onClick={async () => {
+                              if (!currentKiosk?.id) {
+                                alert('לא ניתן לפתוח כרטיסים ללא קיוסק נבחר');
+                                return;
+                              }
+                              
+                              if (user?.role === 'assistant' && !hasPermission('inventory_edit')) {
+                                alert('אין לך הרשאה לערוך מלאי');
+                                return;
+                              }
+                              
+                              try {
+                                await ticketTypesService.updateTicketType(ticket.id, {
+                                  quantity_counter: ticket.quantity_counter,
+                                  quantity_vault: ticket.quantity_vault,
+                                  is_opened: true,
+                                }, currentKiosk.id);
+                                
+                                // Log to audit
+                                await AuditLog.create({
+                                  action: 'open_tickets',
+                                  entity_type: 'ticketType',
+                                  entity_id: ticket.id,
+                                  entity_name: ticket.name,
+                                  details: `פתיחת ${ticket.quantity_counter} כרטיסים`,
+                                  user_id: user?.id,
+                                  user_name: user?.full_name || user?.email,
+                                });
+                                
+                                queryClient.invalidateQueries({ queryKey: ['tickets-inventory', currentKiosk?.id] });
+                                queryClient.invalidateQueries({ queryKey: ['tickets-dashboard', currentKiosk?.id] });
+                                queryClient.invalidateQueries({ queryKey: ['tickets-active'] });
+                              } catch (error) {
+                                console.error('Error opening tickets:', error);
+                                alert('שגיאה בפתיחת הכרטיסים: ' + (error.message || 'שגיאה לא ידועה'));
+                              }
+                            }}
+                            disabled={user?.role === 'assistant' && !hasPermission('inventory_edit')}
+                          >
+                            <Check className="h-3 w-3 ml-1" />
+                            פתח כרטיסים
+                          </Button>
                         </div>
                       </div>
                     )}
@@ -1101,7 +1152,7 @@ export default function Inventory() {
                     <Label>כרטיס</Label>
                     <Select
                       value={transferFormData.ticketId}
-                      onValueChange={(value) => setTransferFormData({ ...transferFormData, ticketId: value, quantity: "" })}
+                      onValueChange={(value) => setTransferFormData({ ...transferFormData, ticketId: value, quantity: "", is_opened: false })}
                     >
                       <SelectTrigger>
                         <SelectValue placeholder="בחר כרטיס" />
@@ -1147,14 +1198,31 @@ export default function Inventory() {
                         </p>
                       </div>
                       
-                      <div className="p-3 bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-800 rounded-lg">
-                        <div className="flex items-start gap-2">
-                          <AlertTriangle className="h-5 w-5 text-orange-600 dark:text-orange-400 mt-0.5 flex-shrink-0" />
-                          <div className="text-sm text-orange-800 dark:text-orange-300">
-                            <strong>חשוב:</strong> לאחר ההעברה, לא לשכוח לפתוח את הכרטיסים כדי שיהיו זמינים למכירה.
-                          </div>
+                      <div className="space-y-2">
+                        <div className="flex items-center gap-2">
+                          <input
+                            type="checkbox"
+                            id="transfer-opened"
+                            checked={transferFormData.is_opened}
+                            onChange={(e) => setTransferFormData({ ...transferFormData, is_opened: e.target.checked })}
+                            className="h-4 w-4"
+                          />
+                          <Label htmlFor="transfer-opened" className="cursor-pointer">
+                            הכרטיסים פתוחים (זמינים למכירה)
+                          </Label>
                         </div>
                       </div>
+                      
+                      {!transferFormData.is_opened && (
+                        <div className="p-3 bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-800 rounded-lg">
+                          <div className="flex items-start gap-2">
+                            <AlertTriangle className="h-5 w-5 text-orange-600 dark:text-orange-400 mt-0.5 flex-shrink-0" />
+                            <div className="text-sm text-orange-800 dark:text-orange-300">
+                              <strong>חשוב:</strong> לאחר ההעברה, לא לשכוח לפתוח את הכרטיסים כדי שיהיו זמינים למכירה.
+                            </div>
+                          </div>
+                        </div>
+                      )}
                     </>
                   )}
                 </>
@@ -1162,7 +1230,10 @@ export default function Inventory() {
             })()}
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setTransferDialogOpen(false)}>
+            <Button variant="outline" onClick={() => {
+              setTransferDialogOpen(false);
+              setTransferFormData({ ticketId: "", quantity: "", is_opened: false });
+            }}>
               ביטול
             </Button>
             <Button
@@ -1179,34 +1250,49 @@ export default function Inventory() {
                 }
                 
                 try {
-                  const { transferInventoryFromVaultToCounter } = await import('@/firebase/services/ticketTypes');
                   if (!currentKiosk?.id) {
                     alert('לא ניתן להעביר מלאי ללא קיוסק נבחר');
                     return;
                   }
-                  await transferInventoryFromVaultToCounter(transferFormData.ticketId, quantity, currentKiosk.id);
+                  
+                  const selectedTicketForTransfer = tickets.find(t => t.id === transferFormData.ticketId);
+                  if (!selectedTicketForTransfer) {
+                    alert('כרטיס לא נמצא');
+                    return;
+                  }
+                  
+                  const currentCounter = selectedTicketForTransfer.quantity_counter ?? 0;
+                  const currentVault = selectedTicketForTransfer.quantity_vault ?? 0;
+                  
+                  if (quantity > currentVault) {
+                    alert(`לא ניתן להעביר ${quantity} כרטיסים. זמין בכספת: ${currentVault}`);
+                    return;
+                  }
+                  
+                  // Use updateTicketType directly to preserve all values and set is_opened
+                  await ticketTypesService.updateTicketType(transferFormData.ticketId, {
+                    quantity_counter: currentCounter + quantity,
+                    quantity_vault: currentVault - quantity,
+                    is_opened: transferFormData.is_opened,
+                  }, currentKiosk.id);
                   
                   // Log to audit
-                  const selectedTicketForTransfer = tickets.find(t => t.id === transferFormData.ticketId);
-                  if (selectedTicketForTransfer) {
-                    await AuditLog.create({
-                      action: 'transfer_inventory',
-                      entity_type: 'ticketType',
-                      entity_id: transferFormData.ticketId,
-                      entity_name: selectedTicketForTransfer.name,
-                      details: `העברת ${quantity} כרטיסים מכספת לדלפק`,
-                      user_id: user?.id,
-                      user_name: user?.full_name || user?.email,
-                    });
-                  }
+                  await AuditLog.create({
+                    action: 'transfer_inventory',
+                    entity_type: 'ticketType',
+                    entity_id: transferFormData.ticketId,
+                    entity_name: selectedTicketForTransfer.name,
+                    details: `העברת ${quantity} כרטיסים מכספת לדלפק${transferFormData.is_opened ? ' (נפתחו)' : ''}`,
+                    user_id: user?.id,
+                    user_name: user?.full_name || user?.email,
+                  });
                   
                   queryClient.invalidateQueries({ queryKey: ['tickets-inventory', currentKiosk?.id] });
                   queryClient.invalidateQueries({ queryKey: ['tickets-dashboard', currentKiosk?.id] });
                   queryClient.invalidateQueries({ queryKey: ['tickets-active'] });
                   
-                  alert('המלאי הועבר בהצלחה! לא לשכוח לפתוח את הכרטיסים.');
                   setTransferDialogOpen(false);
-                  setTransferFormData({ ticketId: "", quantity: "" });
+                  setTransferFormData({ ticketId: "", quantity: "", is_opened: false });
                 } catch (error) {
                   console.error('Error transferring inventory:', error);
                   alert('שגיאה בהעברת המלאי: ' + (error.message || 'שגיאה לא ידועה'));
@@ -1282,14 +1368,32 @@ export default function Inventory() {
                 </div>
                 
                 {packagesFormData.destination === "counter" && (
-                  <div className="p-3 bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-800 rounded-lg">
-                    <div className="flex items-start gap-2">
-                      <AlertTriangle className="h-5 w-5 text-orange-600 dark:text-orange-400 mt-0.5 flex-shrink-0" />
-                      <div className="text-sm text-orange-800 dark:text-orange-300">
-                        <strong>חשוב:</strong> לאחר ההוספה, לא לשכוח לפתוח את הכרטיסים כדי שיהיו זמינים למכירה.
+                  <>
+                    <div className="space-y-2">
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="checkbox"
+                          id="packages-opened"
+                          checked={packagesFormData.is_opened}
+                          onChange={(e) => setPackagesFormData({ ...packagesFormData, is_opened: e.target.checked })}
+                          className="h-4 w-4"
+                        />
+                        <Label htmlFor="packages-opened" className="cursor-pointer">
+                          הכרטיסים פתוחים (זמינים למכירה)
+                        </Label>
                       </div>
                     </div>
-                  </div>
+                    {!packagesFormData.is_opened && (
+                      <div className="p-3 bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-800 rounded-lg">
+                        <div className="flex items-start gap-2">
+                          <AlertTriangle className="h-5 w-5 text-orange-600 dark:text-orange-400 mt-0.5 flex-shrink-0" />
+                          <div className="text-sm text-orange-800 dark:text-orange-300">
+                            <strong>חשוב:</strong> לאחר ההוספה, לא לשכוח לפתוח את הכרטיסים כדי שיהיו זמינים למכירה.
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </>
                 )}
               </>
             ) : (
@@ -1304,6 +1408,7 @@ export default function Inventory() {
                       ticketId: value,
                       ticketName: selectedTicket?.name || "",
                       defaultQuantityPerPackage: selectedTicket?.default_quantity_per_package || null,
+                      is_opened: false,
                     });
                   }}
                 >
@@ -1367,13 +1472,20 @@ export default function Inventory() {
                   
                   const currentCounter = selectedTicket.quantity_counter ?? 0;
                   const currentVault = selectedTicket.quantity_vault ?? 0;
+                  const currentIsOpened = selectedTicket.is_opened ?? false;
                   
                   const updateData = {};
                   if (packagesFormData.destination === "counter") {
                     updateData.quantity_counter = currentCounter + quantity;
-                    updateData.is_opened = false; // New packages are not opened
+                    // Use the checkbox value to determine if tickets are opened
+                    updateData.is_opened = packagesFormData.is_opened;
+                    // Preserve vault value
+                    updateData.quantity_vault = currentVault;
                   } else {
+                    // When updating vault, preserve counter and is_opened values
+                    updateData.quantity_counter = currentCounter;
                     updateData.quantity_vault = currentVault + quantity;
+                    updateData.is_opened = currentIsOpened;
                   }
                   
                   await ticketTypesService.updateTicketType(packagesFormData.ticketId, updateData, currentKiosk.id);
@@ -1397,11 +1509,6 @@ export default function Inventory() {
                   queryClient.invalidateQueries({ queryKey: ['tickets-dashboard', currentKiosk?.id] });
                   queryClient.invalidateQueries({ queryKey: ['tickets-active'] });
                   
-                  const message = packagesFormData.destination === "counter" 
-                    ? `הוספו ${quantity} כרטיסים לדלפק בהצלחה! לא לשכוח לפתוח את הכרטיסים.`
-                    : `הוספו ${quantity} כרטיסים לכספת בהצלחה!`;
-                  alert(message);
-                  
                   setPackagesDialogOpen(false);
                   setPackagesFormData({
                     ticketId: "",
@@ -1409,6 +1516,7 @@ export default function Inventory() {
                     packages: "",
                     destination: "counter",
                     defaultQuantityPerPackage: null,
+                    is_opened: false,
                   });
                 } catch (error) {
                   console.error('Error adding packages:', error);

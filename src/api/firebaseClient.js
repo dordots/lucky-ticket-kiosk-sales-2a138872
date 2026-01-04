@@ -42,8 +42,8 @@ export const firebase = {
       create: (data) => {
         return ticketTypesService.createTicketType(data);
       },
-      update: (id, data) => {
-        return ticketTypesService.updateTicketType(id, data);
+      update: (id, data, kioskId = null) => {
+        return ticketTypesService.updateTicketType(id, data, kioskId);
       },
       delete: (id) => {
         return ticketTypesService.deleteTicketType(id);

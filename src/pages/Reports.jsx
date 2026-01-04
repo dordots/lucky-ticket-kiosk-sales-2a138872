@@ -12,7 +12,8 @@ import {
   Users, 
   Package,
   Download,
-  Calendar
+  Calendar,
+  DollarSign
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -190,6 +191,11 @@ export default function Reports() {
     sum + (s.items?.reduce((is, i) => is + i.quantity, 0) || 0), 0
   );
   const avgSale = totalSales > 0 ? totalRevenue / totalSales : 0;
+  
+  // Personal Profit (only for franchisees with commission_set)
+  const personalProfit = user?.role === 'franchisee' && user?.commission_set && user?.commission_rate
+    ? totalRevenue * (user.commission_rate / 100)
+    : null;
 
   const handleExportReport = () => {
     if (user?.role === 'assistant' && !hasPermission('reports_export')) {
@@ -321,7 +327,7 @@ export default function Reports() {
       </div>
 
       {/* Summary Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className={`grid grid-cols-1 sm:grid-cols-2 ${personalProfit ? 'lg:grid-cols-5' : 'lg:grid-cols-4'} gap-4`}>
         <Card className="bg-gradient-to-br from-indigo-500 to-purple-600 text-white">
           <CardContent className="p-4">
             <div className="flex items-center gap-3 mb-2">
@@ -358,7 +364,41 @@ export default function Reports() {
             <p className="text-2xl font-bold">₪{avgSale.toFixed(2)}</p>
           </CardContent>
         </Card>
+        {personalProfit !== null && (
+          <Card className="bg-gradient-to-br from-green-500 to-emerald-600 text-white">
+            <CardContent className="p-4">
+              <div className="flex items-center gap-3 mb-2">
+                <DollarSign className="h-5 w-5 text-green-200" />
+                <span className="text-green-100">רווח אישי ({user?.commission_rate}%)</span>
+              </div>
+              <p className="text-2xl font-bold">₪{personalProfit.toFixed(2)}</p>
+            </CardContent>
+          </Card>
+        )}
       </div>
+      
+      {/* Commission Not Set Message */}
+      {user?.role === 'franchisee' && !user?.commission_set && (
+        <Card className="bg-amber-50 dark:bg-amber-900/20 border-amber-200 dark:border-amber-800">
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <DollarSign className="h-5 w-5 text-amber-600 dark:text-amber-400" />
+                <div>
+                  <p className="font-medium text-foreground">הגדר עמלה כדי לראות את הרווחים האישיים שלך</p>
+                  <p className="text-sm text-muted-foreground">עבור להגדרות כדי להגדיר את גובה העמלה שלך</p>
+                </div>
+              </div>
+              <Button 
+                onClick={() => window.location.href = '/Settings'}
+                className="bg-amber-600 hover:bg-amber-700"
+              >
+                הגדר עמלה עכשיו
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Charts Row 1 */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">

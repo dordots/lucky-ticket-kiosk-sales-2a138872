@@ -192,14 +192,19 @@ export default function SellerPOS() {
         const ticket = tickets.find(t => t.id === ticketId);
         if (ticket) {
           const currentQuantityCounter = ticket.quantity_counter ?? 0;
+          const currentQuantityVault = ticket.quantity_vault ?? 0;
+          const currentIsOpened = ticket.is_opened ?? false;
           const newQuantityCounter = currentQuantityCounter - item.quantity;
           
           if (newQuantityCounter < 0) {
             throw new Error(`לא מספיק מלאי עבור ${ticket.name}. זמין: ${currentQuantityCounter}, נדרש: ${item.quantity}`);
           }
           
+          // Preserve all existing values when updating
           await TicketType.update(ticketId, {
             quantity_counter: newQuantityCounter,
+            quantity_vault: currentQuantityVault,
+            is_opened: currentIsOpened,
           }, currentKiosk.id);
 
           // Check for stock notifications (wrap in try-catch to not fail the sale)
