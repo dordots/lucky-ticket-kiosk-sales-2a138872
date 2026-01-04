@@ -206,6 +206,7 @@ async function importPaisTicketsForAllKiosks() {
           ticket_category: 'pais', // Mark as Pais ticket
           pais_card_id: ticket.cardId, // Store original card ID for reference
           is_active: true, // Active but not in stock
+          default_quantity_per_package: 20, // Default: 20 tickets per package for Pais tickets
           amount: amount, // Map: { kioskId: "counter,vault" }
           amount_is_opened: amount_is_opened, // Map: { kioskId: boolean }
           created_date: Timestamp.now(),
@@ -234,9 +235,9 @@ async function importPaisTicketsForAllKiosks() {
     
     console.log('\n📝 Note: All tickets were created with:');
     console.log('   - ticket_category: "pais"');
-    console.log('   - quantity_counter: 0 (not in stock on counter)');
-    console.log('   - quantity_vault: 0 (not in stock in vault)');
-    console.log('   - is_opened: false (not opened)');
+    console.log('   - default_quantity_per_package: 20 (20 tickets per package)');
+    console.log('   - amount: { kioskId: "0,0" } (counter=0, vault=0 for all kiosks)');
+    console.log('   - amount_is_opened: { kioskId: false } (not opened for all kiosks)');
     console.log('   - is_active: true (available for selection)');
     console.log('   - Prices are based on category ranges from the website');
 
