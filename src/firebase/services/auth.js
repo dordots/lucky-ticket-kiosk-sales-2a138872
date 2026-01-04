@@ -169,6 +169,10 @@ export const createUser = async (email, password, userData) => {
       phone: userData.phone || '',
       is_active: userData.is_active !== false,
       permissions: Array.isArray(userData.permissions) ? userData.permissions : (role === 'assistant' ? [] : []),
+      onboarding_completed: userData.onboarding_completed ?? (role === 'franchisee' ? false : true), // Franchisees need onboarding
+      onboarding_completed_date: userData.onboarding_completed_date || null,
+      commission_rate: userData.commission_rate || null,
+      commission_set: userData.commission_set ?? false,
       created_date: Timestamp.now()
     });
     

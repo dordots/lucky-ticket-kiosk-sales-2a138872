@@ -18,7 +18,7 @@ export default function QuantityDialog({
   onConfirm 
 }) {
   const [quantity, setQuantity] = useState(currentQty || 1);
-  const maxQty = ticket?.quantity || 0;
+  const maxQty = ticket?.quantity_counter ?? 0;
 
   const handleConfirm = () => {
     onConfirm(quantity);
@@ -111,7 +111,7 @@ export default function QuantityDialog({
 
           {/* Stock Info */}
           <p className="text-center text-sm text-muted-foreground">
-            במלאי: {ticket.quantity} יחידות
+            במלאי: {ticket.quantity_counter ?? 0} יחידות
           </p>
         </div>
 

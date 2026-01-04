@@ -53,9 +53,8 @@ export default function SellerPOS() {
       }
       try {
         const result = await ticketTypesService.getTicketTypesByFilter({ 
-          is_active: true, 
-          kiosk_id: currentKiosk.id 
-        });
+          is_active: true
+        }, currentKiosk.id);
         console.log('SellerPOS: Loaded tickets:', result.length, 'for kiosk:', currentKiosk.id);
         return result;
       } catch (error) {
@@ -72,6 +71,17 @@ export default function SellerPOS() {
   });
 
   const filteredTickets = tickets.filter(t => {
+    // Only show tickets that are available for sale:
+    // - quantity_counter > 0 (has stock on counter)
+    // - is_opened === true (tickets are opened)
+    // - is_active === true (ticket type is active)
+    const quantityCounter = t.quantity_counter ?? 0;
+    const isOpened = t.is_opened ?? false;
+    
+    if (quantityCounter <= 0 || !isOpened || !t.is_active) {
+      return false;
+    }
+    
     // Search filter
     const searchLower = searchTerm.toLowerCase();
     const matchesSearch = 
@@ -177,19 +187,25 @@ export default function SellerPOS() {
         kiosk_id: currentKiosk.id,
       });
 
-      // Update inventory for each ticket
+      // Update inventory for each ticket (only quantity_counter)
       for (const [ticketId, item] of Object.entries(cartItems)) {
         const ticket = tickets.find(t => t.id === ticketId);
         if (ticket) {
-          const newQuantity = ticket.quantity - item.quantity;
+          const currentQuantityCounter = ticket.quantity_counter ?? 0;
+          const newQuantityCounter = currentQuantityCounter - item.quantity;
+          
+          if (newQuantityCounter < 0) {
+            throw new Error(`לא מספיק מלאי עבור ${ticket.name}. זמין: ${currentQuantityCounter}, נדרש: ${item.quantity}`);
+          }
+          
           await TicketType.update(ticketId, {
-            quantity: newQuantity,
-          });
+            quantity_counter: newQuantityCounter,
+          }, currentKiosk.id);
 
           // Check for stock notifications (wrap in try-catch to not fail the sale)
           try {
-            // Check for out of stock notification (quantity = 0)
-            if (newQuantity === 0) {
+            // Check for out of stock notification (quantity_counter = 0)
+            if (newQuantityCounter === 0) {
               const existingOutOfStockNotifs = await Notification.filter({
                 ticket_type_id: ticketId,
                 is_read: false,
@@ -208,8 +224,8 @@ export default function SellerPOS() {
                 queryClient.invalidateQueries({ queryKey: ['notifications-unread'] });
               }
             }
-            // Check for low stock notification (quantity > 0 but <= threshold)
-            else if (newQuantity <= ticket.min_threshold && newQuantity > 0) {
+            // Check for low stock notification (quantity_counter > 0 but <= threshold)
+            else if (newQuantityCounter <= ticket.min_threshold && newQuantityCounter > 0) {
               // Check if notification already exists
               const existingLowStockNotifs = await Notification.filter({
                 ticket_type_id: ticketId,
@@ -221,7 +237,7 @@ export default function SellerPOS() {
                 await Notification.create({
                   ticket_type_id: ticketId,
                   ticket_name: ticket.name,
-                  current_quantity: newQuantity,
+                  current_quantity: newQuantityCounter,
                   threshold: ticket.min_threshold,
                   notification_type: "low_stock",
                 });

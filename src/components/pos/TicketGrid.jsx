@@ -18,8 +18,9 @@ export default function TicketGrid({ tickets, onSelect, selectedItems }) {
   return (
     <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
       {tickets.map((ticket, index) => {
-        const isLowStock = ticket.quantity <= ticket.min_threshold;
-        const isOutOfStock = ticket.quantity <= 0;
+        const quantityCounter = ticket.quantity_counter ?? 0;
+        const isLowStock = quantityCounter <= (ticket.min_threshold || 10);
+        const isOutOfStock = quantityCounter <= 0;
         const selectedQty = selectedItems[ticket.id]?.quantity || 0;
         const gradient = colorMap[ticket.color] || colorMap.blue;
 
@@ -84,7 +85,7 @@ export default function TicketGrid({ tickets, onSelect, selectedItems }) {
               </span>
               <div className="flex items-center gap-1 text-muted-foreground">
                 <Package className="h-3.5 w-3.5" />
-                <span className="text-sm">{ticket.quantity}</span>
+                <span className="text-sm">{quantityCounter}</span>
               </div>
             </div>
 

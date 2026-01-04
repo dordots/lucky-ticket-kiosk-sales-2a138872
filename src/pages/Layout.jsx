@@ -149,6 +149,22 @@ export default function Layout({ children, currentPageName }) {
     }
   }, [isLoading, kioskLoading, user, currentKiosk, location.pathname, navigate]);
 
+  // Franchisee onboarding check: redirect to onboarding if not completed
+  useEffect(() => {
+    if (isLoading || kioskLoading) return;
+    if (user?.role === 'franchisee' && currentKiosk) {
+      const path = location.pathname;
+      // Check if onboarding is not completed
+      if (!user.onboarding_completed && path !== '/Onboarding') {
+        navigate('/Onboarding', { replace: true });
+      }
+      // If onboarding is completed but user is on onboarding page, redirect to dashboard
+      else if (user.onboarding_completed && path === '/Onboarding') {
+        navigate('/Dashboard', { replace: true });
+      }
+    }
+  }, [isLoading, kioskLoading, user, currentKiosk, location.pathname, navigate]);
+
   const filteredNavItems = navItems.filter(item => {
     if (!user) return false;
     
@@ -209,6 +225,11 @@ export default function Layout({ children, currentPageName }) {
   // Show login page directly if on login route
   if (location.pathname === '/Login') {
     return <Login />;
+  }
+
+  // Show onboarding page without layout (full screen)
+  if (location.pathname === '/Onboarding') {
+    return <>{children}</>;
   }
 
   // Show loading state

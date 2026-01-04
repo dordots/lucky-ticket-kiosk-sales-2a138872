@@ -10,9 +10,10 @@ const ITEMS_PER_PAGE = 5;
 
 export default function LowStockAlert({ tickets }) {
   const [currentPage, setCurrentPage] = useState(0);
-  const lowStockTickets = tickets.filter(t => 
-    t.quantity <= t.min_threshold && t.is_active
-  );
+  const lowStockTickets = tickets.filter(t => {
+    const quantityCounter = t.quantity_counter ?? 0;
+    return quantityCounter <= (t.min_threshold || 10) && t.is_active;
+  });
 
   if (lowStockTickets.length === 0) {
     return null;
@@ -49,7 +50,10 @@ export default function LowStockAlert({ tickets }) {
 
       <div className="space-y-3">
         {currentTickets.map((ticket) => {
-          const percentage = Math.min(100, (ticket.quantity / ticket.min_threshold) * 100);
+          const quantityCounter = ticket.quantity_counter ?? 0;
+          const quantityVault = ticket.quantity_vault ?? 0;
+          const threshold = ticket.min_threshold || 10;
+          const percentage = Math.min(100, (quantityCounter / threshold) * 100);
           
           return (
             <div key={ticket.id} className="bg-card rounded-xl p-3">
@@ -60,18 +64,23 @@ export default function LowStockAlert({ tickets }) {
                 </div>
                 <div className="text-right">
                   <span className={`text-sm font-bold block ${
-                    ticket.quantity === 0 ? 'text-red-500' : 'text-amber-500'
+                    quantityCounter === 0 ? 'text-red-500' : 'text-amber-500'
                   }`}>
-                    במלאי: {ticket.quantity}
+                    דלפק: {quantityCounter}
                   </span>
+                  {quantityVault > 0 && (
+                    <span className="text-xs text-muted-foreground block">
+                      כספת: {quantityVault}
+                    </span>
+                  )}
                   <span className="text-xs text-muted-foreground">
-                    סף מינימלי: {ticket.min_threshold}
+                    סף מינימלי: {threshold}
                   </span>
                 </div>
               </div>
               <Progress 
                 value={percentage} 
-                className={`h-2 ${ticket.quantity === 0 ? 'bg-red-900/30' : 'bg-amber-900/30'}`}
+                className={`h-2 ${quantityCounter === 0 ? 'bg-red-900/30' : 'bg-amber-900/30'}`}
               />
             </div>
           );
