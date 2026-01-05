@@ -2,6 +2,8 @@ import React, { createContext, useContext, useState, useEffect } from 'react';
 import { getCurrentUser } from '@/firebase/services/auth';
 import { getKioskForUser, getKioskById } from '@/firebase/services/kiosks';
 import { getAllKiosks } from '@/firebase/services/kiosks';
+import { auth } from '@/firebase/config';
+import { onAuthStateChanged } from 'firebase/auth';
 
 const KioskContext = createContext(null);
 
@@ -21,9 +23,19 @@ export const KioskProvider = ({ children }) => {
   const [user, setUser] = useState(null);
 
   useEffect(() => {
-    const loadKioskData = async () => {
+    // Listen to auth state changes
+    const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
       try {
         setIsLoading(true);
+        
+        // If no Firebase user is authenticated, clear state and return
+        if (!firebaseUser) {
+          setCurrentKiosk(null);
+          setAllKiosks([]);
+          setUser(null);
+          setIsLoading(false);
+          return;
+        }
         
         // Wait a bit for auth to initialize
         await new Promise(resolve => setTimeout(resolve, 200));
@@ -124,12 +136,14 @@ export const KioskProvider = ({ children }) => {
         console.error('Error loading kiosk data:', error);
         setCurrentKiosk(null);
         setAllKiosks([]);
+        setUser(null);
       } finally {
         setIsLoading(false);
       }
-    };
+    });
 
-    loadKioskData();
+    // Cleanup subscription on unmount
+    return () => unsubscribe();
   }, []);
 
   const selectKiosk = async (kioskId) => {

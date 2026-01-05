@@ -36,6 +36,14 @@ import {
 
 const COLORS = ['#6366f1', '#8b5cf6', '#a855f7', '#d946ef', '#ec4899', '#f43f5e', '#f97316', '#eab308'];
 
+// Payment method colors - distinct colors for each payment method
+const PAYMENT_METHOD_COLORS = {
+  cash: '#10b981', // Green for cash
+  card: '#3b82f6', // Blue for card
+  מזומן: '#10b981', // Green for cash (Hebrew)
+  כרטיס: '#3b82f6', // Blue for card (Hebrew)
+};
+
 export default function Reports() {
   const [reportPeriod, setReportPeriod] = useState("week");
   const { currentKiosk, isLoading: kioskLoading } = useKiosk();
@@ -181,6 +189,7 @@ export default function Reports() {
     return Object.entries(distribution).map(([key, value]) => ({
       name: labels[key],
       value,
+      method: key, // Keep the original method key for color mapping
     }));
   })();
 
@@ -451,7 +460,10 @@ export default function Reports() {
                     label={false}
                   >
                     {paymentDistribution.map((entry, index) => (
-                      <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                      <Cell 
+                        key={`cell-${index}`} 
+                        fill={PAYMENT_METHOD_COLORS[entry.method] || PAYMENT_METHOD_COLORS[entry.name] || COLORS[index % COLORS.length]} 
+                      />
                     ))}
                   </Pie>
                   <Legend 

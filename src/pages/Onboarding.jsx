@@ -176,13 +176,29 @@ export default function Onboarding() {
 
       await usersService.updateUser(user.id, updateData);
 
+      // Count tickets with inventory
+      const ticketsWithInventory = Object.values(inventoryData).filter(data => {
+        const counter = parseInt(data.quantity_counter) || 0;
+        const vault = parseInt(data.quantity_vault) || 0;
+        return counter > 0 || vault > 0;
+      }).length;
+
       // Log to audit
       await AuditLog.create({
         action: 'complete_onboarding',
         entity_type: 'user',
         entity_id: user.id,
         entity_name: user.full_name || user.email,
-        details: 'השלמת תהליך און-בורדינג',
+        details: {
+          user_id: user.id,
+          user_name: user.full_name || user.email,
+          user_email: user.email,
+          commission_rate: !skipCommission && commissionRate ? parseFloat(commissionRate) : null,
+          commission_set: !skipCommission && commissionRate ? true : false,
+          tickets_with_inventory: ticketsWithInventory,
+          onboarding_completed_date: updateData.onboarding_completed_date,
+          message: `השלמת תהליך און-בורדינג${!skipCommission && commissionRate ? ` עם עמלה של ${commissionRate}%` : ''}`
+        },
         user_id: user.id,
         user_name: user.full_name || user.email,
       });

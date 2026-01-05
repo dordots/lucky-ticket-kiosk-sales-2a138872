@@ -16,7 +16,10 @@ import {
   X,
   Palette,
   Filter,
-  XCircle
+  XCircle,
+  ArrowUpDown,
+  ArrowUp,
+  ArrowDown
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -105,11 +108,14 @@ export default function Inventory() {
     defaultQuantityPerPackage: null,
     is_opened: false, // Whether the tickets are opened (only for counter)
   });
-  const [categoryFilter, setCategoryFilter] = useState("all");
+  const [sortBy, setSortBy] = useState("name"); // name, price, quantity_counter, quantity_vault, total_quantity
+  const [sortOrder, setSortOrder] = useState("asc"); // asc, desc
   const [advancedFilters, setAdvancedFilters] = useState({
     status: "all", // all, active, inactive
     stockStatus: "all", // all, inStock, lowStock, outOfStock
     priceRange: "all", // all, 0-25, 25-50, 50-100, 100+
+    needsOpening: "all", // all, yes, no
+    hasVaultStock: "all", // all, yes, no
   });
   const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
 
@@ -422,12 +428,6 @@ export default function Inventory() {
       t.nickname?.toLowerCase().includes(searchLower);
     if (!matchesSearch) return false;
     
-    // Category filter
-    if (categoryFilter !== "all") {
-      const ticketCategory = t.ticket_category || "custom";
-      if (categoryFilter !== ticketCategory) return false;
-    }
-    
     // Advanced filters - Status
     if (advancedFilters.status !== "all") {
       if (advancedFilters.status === "active" && t.is_active === false) return false;
@@ -452,18 +452,76 @@ export default function Inventory() {
       if (advancedFilters.priceRange === "100+" && price <= 100) return false;
     }
     
+    // Advanced filters - Needs Opening
+    if (advancedFilters.needsOpening !== "all") {
+      const quantityCounter = t.quantity_counter ?? 0;
+      const needsOpening = quantityCounter > 0 && !t.is_opened;
+      if (advancedFilters.needsOpening === "yes" && !needsOpening) return false;
+      if (advancedFilters.needsOpening === "no" && needsOpening) return false;
+    }
+    
+    // Advanced filters - Has Vault Stock
+    if (advancedFilters.hasVaultStock !== "all") {
+      const quantityVault = t.quantity_vault ?? 0;
+      if (advancedFilters.hasVaultStock === "yes" && quantityVault === 0) return false;
+      if (advancedFilters.hasVaultStock === "no" && quantityVault > 0) return false;
+    }
+    
     return true;
+  });
+
+  // Sort filtered tickets
+  const sortedTickets = [...filteredTickets].sort((a, b) => {
+    let aValue, bValue;
+    
+    switch (sortBy) {
+      case "name":
+        aValue = a.name?.toLowerCase() || "";
+        bValue = b.name?.toLowerCase() || "";
+        break;
+      case "price":
+        aValue = a.price || 0;
+        bValue = b.price || 0;
+        break;
+      case "quantity_counter":
+        aValue = a.quantity_counter ?? 0;
+        bValue = b.quantity_counter ?? 0;
+        break;
+      case "quantity_vault":
+        aValue = a.quantity_vault ?? 0;
+        bValue = b.quantity_vault ?? 0;
+        break;
+      case "total_quantity":
+        aValue = (a.quantity_counter ?? 0) + (a.quantity_vault ?? 0);
+        bValue = (b.quantity_counter ?? 0) + (b.quantity_vault ?? 0);
+        break;
+      default:
+        aValue = a.name?.toLowerCase() || "";
+        bValue = b.name?.toLowerCase() || "";
+    }
+    
+    if (typeof aValue === "string") {
+      return sortOrder === "asc" 
+        ? aValue.localeCompare(bValue, 'he')
+        : bValue.localeCompare(aValue, 'he');
+    } else {
+      return sortOrder === "asc" ? aValue - bValue : bValue - aValue;
+    }
   });
 
   const hasActiveFilters = advancedFilters.status !== "all" || 
                            advancedFilters.stockStatus !== "all" || 
-                           advancedFilters.priceRange !== "all";
+                           advancedFilters.priceRange !== "all" ||
+                           advancedFilters.needsOpening !== "all" ||
+                           advancedFilters.hasVaultStock !== "all";
 
   const clearAdvancedFilters = () => {
     setAdvancedFilters({
       status: "all",
       stockStatus: "all",
       priceRange: "all",
+      needsOpening: "all",
+      hasVaultStock: "all",
     });
   };
 
@@ -532,9 +590,10 @@ export default function Inventory() {
         </Card>
       </div>
 
-      {/* Search and Basic Filters */}
-      <div className="flex flex-col sm:flex-row gap-4">
-        <div className="relative max-w-md flex-1">
+      {/* Search and Filters */}
+      <div className="space-y-4">
+        {/* Search Bar */}
+        <div className="relative max-w-md">
           <Search className="absolute right-3 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
           <Input
             placeholder="חיפוש לפי שם, קוד או כינוי..."
@@ -543,29 +602,54 @@ export default function Inventory() {
             className="pr-10"
           />
         </div>
-        <Select value={categoryFilter} onValueChange={setCategoryFilter}>
-          <SelectTrigger className="w-full sm:w-[200px]">
-            <SelectValue placeholder="סוג כרטיס" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">כל הסוגים</SelectItem>
-            <SelectItem value="pais">מפעל הפיס</SelectItem>
-            <SelectItem value="custom">מותאם אישית</SelectItem>
-          </SelectContent>
-        </Select>
-        <Button
-          variant={showAdvancedFilters ? "default" : "outline"}
-          onClick={() => setShowAdvancedFilters(!showAdvancedFilters)}
-          className="w-full sm:w-auto"
-        >
-          <Filter className="h-4 w-4 ml-2" />
-          פילטרים נוספים
-          {hasActiveFilters && (
-            <Badge variant="secondary" className="mr-2 bg-indigo-100 text-indigo-700">
-              פעיל
-            </Badge>
-          )}
-        </Button>
+
+        {/* Sort and Filter Controls */}
+        <div className="flex flex-wrap items-center gap-3">
+          {/* Sort Controls */}
+          <div className="flex items-center gap-2 bg-accent p-2 rounded-lg border border-border">
+            <ArrowUpDown className="h-4 w-4 text-muted-foreground" />
+            <Select value={sortBy} onValueChange={setSortBy}>
+              <SelectTrigger className="w-[160px] h-8 text-sm border-0 bg-transparent focus:ring-0">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="name">שם</SelectItem>
+                <SelectItem value="price">מחיר</SelectItem>
+                <SelectItem value="quantity_counter">מלאי בדלפק</SelectItem>
+                <SelectItem value="quantity_vault">מלאי בכספת</SelectItem>
+                <SelectItem value="total_quantity">סה&quot;כ מלאי</SelectItem>
+              </SelectContent>
+            </Select>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8"
+              onClick={() => setSortOrder(sortOrder === "asc" ? "desc" : "asc")}
+              title={sortOrder === "asc" ? "מיון עולה" : "מיון יורד"}
+            >
+              {sortOrder === "asc" ? (
+                <ArrowUp className="h-4 w-4" />
+              ) : (
+                <ArrowDown className="h-4 w-4" />
+              )}
+            </Button>
+          </div>
+
+          {/* Advanced Filters Button */}
+          <Button
+            variant={showAdvancedFilters ? "default" : "outline"}
+            onClick={() => setShowAdvancedFilters(!showAdvancedFilters)}
+            className="h-8"
+          >
+            <Filter className="h-4 w-4 ml-2" />
+            פילטרים
+            {hasActiveFilters && (
+              <Badge variant="secondary" className="mr-2 bg-indigo-100 text-indigo-700 text-xs">
+                פעיל
+              </Badge>
+            )}
+          </Button>
+        </div>
       </div>
 
       {/* Advanced Filters */}
@@ -586,7 +670,7 @@ export default function Inventory() {
                 </Button>
               )}
             </div>
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
               <div className="space-y-2">
                 <Label>סטטוס</Label>
                 <Select
@@ -640,6 +724,47 @@ export default function Inventory() {
                   </SelectContent>
                 </Select>
               </div>
+
+              <div className="space-y-2">
+                <Label className="flex items-center gap-2">
+                  <AlertTriangle className="h-4 w-4 text-orange-500" />
+                  צריך לפתוח
+                </Label>
+                <Select
+                  value={advancedFilters.needsOpening}
+                  onValueChange={(value) => setAdvancedFilters({ ...advancedFilters, needsOpening: value })}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="הכל" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">הכל</SelectItem>
+                    <SelectItem value="yes">צריך לפתוח</SelectItem>
+                    <SelectItem value="no">לא צריך לפתוח</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-2">
+                <Label className="flex items-center gap-2">
+                  <Package className="h-4 w-4 text-indigo-500" />
+                  מלאי בכספת
+                </Label>
+                <Select
+                  value={advancedFilters.hasVaultStock}
+                  onValueChange={(value) => setAdvancedFilters({ ...advancedFilters, hasVaultStock: value })}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="הכל" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">הכל</SelectItem>
+                    <SelectItem value="yes">יש מלאי</SelectItem>
+                    <SelectItem value="no">אין מלאי</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
             </div>
           </CardContent>
         </Card>
@@ -648,7 +773,7 @@ export default function Inventory() {
       {/* Tickets Grid */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
         <AnimatePresence>
-          {filteredTickets.map((ticket, index) => {
+          {sortedTickets.map((ticket, index) => {
             const quantityCounter = ticket.quantity_counter ?? 0;
             const quantityVault = ticket.quantity_vault ?? 0;
             const totalQuantity = quantityCounter + quantityVault;
@@ -692,65 +817,67 @@ export default function Inventory() {
                               <p className="text-sm text-muted-foreground font-medium">"{ticket.nickname}"</p>
                             )}
                           </div>
-                          {ticket.ticket_category === 'pais' && (
-                            <Badge variant="outline" className="text-xs bg-blue-50 text-blue-700 border-blue-200">
-                              מפעל הפיס
-                            </Badge>
-                          )}
                         </div>
                         <p className="text-sm text-muted-foreground">{ticket.code}</p>
                       </div>
-                      <div className="flex gap-1">
-                        <Button 
-                          variant="ghost" 
-                          size="icon" 
-                          onClick={() => {
-                            setPackagesFormData({
-                              ticketId: ticket.id,
-                              ticketName: ticket.name,
-                              packages: "",
-                              destination: "counter",
-                              defaultQuantityPerPackage: ticket.default_quantity_per_package || null,
-                              is_opened: false,
-                            });
-                            setPackagesDialogOpen(true);
-                          }}
-                          disabled={user?.role === 'assistant' && !hasPermission('inventory_edit')}
-                          title={ticket.default_quantity_per_package ? "עדכן מלאי לפי חבילות" : "עדכן מלאי"}
-                          className={ticket.default_quantity_per_package ? "text-green-600" : ""}
-                        >
-                          <Plus className="h-4 w-4" />
-                        </Button>
-                        {quantityVault > 0 && (
+                      <div className="flex flex-col gap-1">
+                        <div className="flex gap-1">
                           <Button 
                             variant="ghost" 
                             size="icon" 
                             onClick={() => {
-                              setTransferFormData({ ticketId: ticket.id, quantity: "", is_opened: false });
-                              setTransferDialogOpen(true);
+                              setPackagesFormData({
+                                ticketId: ticket.id,
+                                ticketName: ticket.name,
+                                packages: "",
+                                destination: "counter",
+                                defaultQuantityPerPackage: ticket.default_quantity_per_package || null,
+                                is_opened: false,
+                              });
+                              setPackagesDialogOpen(true);
                             }}
                             disabled={user?.role === 'assistant' && !hasPermission('inventory_edit')}
-                            title="העבר מכספת לדלפק"
+                            title={ticket.default_quantity_per_package ? "עדכן מלאי לפי חבילות" : "עדכן מלאי"}
+                            className={ticket.default_quantity_per_package ? "text-green-600" : ""}
                           >
-                            <Package className="h-4 w-4 text-blue-500" />
+                            <Plus className="h-4 w-4" />
                           </Button>
-                        )}
-                        <Button 
-                          variant="ghost" 
-                          size="icon" 
-                          onClick={() => handleEdit(ticket)}
-                          disabled={user?.role === 'assistant' && !hasPermission('inventory_edit')}
-                        >
-                          <Edit className="h-4 w-4 text-muted-foreground" />
-                        </Button>
-                        <Button 
-                          variant="ghost" 
-                          size="icon" 
-                          onClick={() => handleDelete(ticket)}
-                          disabled={user?.role === 'assistant' && !hasPermission('inventory_delete')}
-                        >
-                          <Trash2 className="h-4 w-4 text-red-400" />
-                        </Button>
+                          {quantityVault > 0 && (
+                            <Button 
+                              variant="ghost" 
+                              size="icon" 
+                              onClick={() => {
+                                setTransferFormData({ ticketId: ticket.id, quantity: "", is_opened: false });
+                                setTransferDialogOpen(true);
+                              }}
+                              disabled={user?.role === 'assistant' && !hasPermission('inventory_edit')}
+                              title="העבר מכספת לדלפק"
+                            >
+                              <Package className="h-4 w-4 text-blue-500" />
+                            </Button>
+                          )}
+                          {quantityVault === 0 && (
+                            <div className="w-10 h-10"></div>
+                          )}
+                        </div>
+                        <div className="flex gap-1">
+                          <Button 
+                            variant="ghost" 
+                            size="icon" 
+                            onClick={() => handleEdit(ticket)}
+                            disabled={user?.role === 'assistant' && !hasPermission('inventory_edit')}
+                          >
+                            <Edit className="h-4 w-4 text-muted-foreground" />
+                          </Button>
+                          <Button 
+                            variant="ghost" 
+                            size="icon" 
+                            onClick={() => handleDelete(ticket)}
+                            disabled={user?.role === 'assistant' && !hasPermission('inventory_delete')}
+                          >
+                            <Trash2 className="h-4 w-4 text-red-400" />
+                          </Button>
+                        </div>
                       </div>
                     </div>
 
@@ -763,16 +890,16 @@ export default function Inventory() {
 
                     {/* Needs Opening Indicator */}
                     {needsOpening && (
-                      <div className="mb-2 p-2 bg-orange-100 dark:bg-orange-900/30 rounded-lg border border-orange-300 dark:border-orange-700">
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center gap-2 text-orange-700 dark:text-orange-300">
-                            <AlertTriangle className="h-4 w-4" />
-                            <span className="text-xs font-medium">צריך לפתוח את הכרטיסים</span>
+                      <div className="mb-2 p-1.5 bg-orange-100 dark:bg-orange-900/30 rounded border border-orange-300 dark:border-orange-700">
+                        <div className="flex items-center justify-between gap-2">
+                          <div className="flex items-center gap-1.5 text-orange-700 dark:text-orange-300">
+                            <AlertTriangle className="h-3.5 w-3.5" />
+                            <span className="text-xs">צריך לפתוח</span>
                           </div>
                           <Button
                             size="sm"
                             variant="outline"
-                            className="h-7 text-xs bg-white dark:bg-gray-800 border-orange-300 dark:border-orange-700 text-orange-700 dark:text-orange-300 hover:bg-orange-200 dark:hover:bg-orange-900/50"
+                            className="h-6 px-2 text-xs bg-white dark:bg-gray-800 border-orange-300 dark:border-orange-700 text-orange-700 dark:text-orange-300 hover:bg-orange-200 dark:hover:bg-orange-900/50"
                             onClick={async () => {
                               if (!currentKiosk?.id) {
                                 alert('לא ניתן לפתוח כרטיסים ללא קיוסק נבחר');
@@ -797,7 +924,12 @@ export default function Inventory() {
                                   entity_type: 'ticketType',
                                   entity_id: ticket.id,
                                   entity_name: ticket.name,
-                                  details: `פתיחת ${ticket.quantity_counter} כרטיסים`,
+                                  details: {
+                                    ticket_name: ticket.name,
+                                    ticket_id: ticket.id,
+                                    quantity_opened: ticket.quantity_counter,
+                                    message: `נפתחו ${ticket.quantity_counter} כרטיסים מסוג ${ticket.name}`
+                                  },
                                   user_id: user?.id,
                                   user_name: user?.full_name || user?.email,
                                 });
@@ -812,8 +944,8 @@ export default function Inventory() {
                             }}
                             disabled={user?.role === 'assistant' && !hasPermission('inventory_edit')}
                           >
-                            <Check className="h-3 w-3 ml-1" />
-                            פתח כרטיסים
+                            <Check className="h-3 w-3" />
+                            <span className="mr-1">פתח</span>
                           </Button>
                         </div>
                       </div>
@@ -863,7 +995,7 @@ export default function Inventory() {
         </AnimatePresence>
       </div>
 
-      {filteredTickets.length === 0 && !isLoading && (
+      {sortedTickets.length === 0 && !isLoading && (
         <div className="text-center py-12 text-muted-foreground">
           <Package className="h-12 w-12 mx-auto mb-4 opacity-30" />
           <p className="font-medium">לא נמצאו סוגי כרטיסים</p>
@@ -1148,26 +1280,17 @@ export default function Inventory() {
               
               return (
                 <>
-                  <div className="space-y-2">
-                    <Label>כרטיס</Label>
-                    <Select
-                      value={transferFormData.ticketId}
-                      onValueChange={(value) => setTransferFormData({ ...transferFormData, ticketId: value, quantity: "", is_opened: false })}
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder="בחר כרטיס" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {tickets
-                          .filter(t => (t.quantity_vault ?? 0) > 0)
-                          .map(ticket => (
-                            <SelectItem key={ticket.id} value={ticket.id}>
-                              {ticket.name} (זמין בכספת: {ticket.quantity_vault ?? 0})
-                            </SelectItem>
-                          ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
+                  {selectedTicketForTransfer && (
+                    <div className="space-y-2">
+                      <Label>כרטיס</Label>
+                      <div className="p-3 bg-accent rounded-lg border border-border">
+                        <div className="font-medium text-foreground">{selectedTicketForTransfer.name}</div>
+                        {selectedTicketForTransfer.nickname && (
+                          <div className="text-sm text-muted-foreground">"{selectedTicketForTransfer.nickname}"</div>
+                        )}
+                      </div>
+                    </div>
+                  )}
                   
                   {selectedTicketForTransfer && (
                     <>
@@ -1282,7 +1405,19 @@ export default function Inventory() {
                     entity_type: 'ticketType',
                     entity_id: transferFormData.ticketId,
                     entity_name: selectedTicketForTransfer.name,
-                    details: `העברת ${quantity} כרטיסים מכספת לדלפק${transferFormData.is_opened ? ' (נפתחו)' : ''}`,
+                    details: {
+                      ticket_name: selectedTicketForTransfer.name,
+                      ticket_id: transferFormData.ticketId,
+                      quantity: quantity,
+                      from: 'vault',
+                      to: 'counter',
+                      is_opened: transferFormData.is_opened,
+                      quantity_before_vault: currentVault,
+                      quantity_after_vault: currentVault - quantity,
+                      quantity_before_counter: currentCounter,
+                      quantity_after_counter: currentCounter + quantity,
+                      message: `הועברו ${quantity} כרטיסים מכספת לדלפק${transferFormData.is_opened ? ' ונפתחו' : ''}`
+                    },
                     user_id: user?.id,
                     user_name: user?.full_name || user?.email,
                   });
@@ -1491,16 +1626,28 @@ export default function Inventory() {
                   await ticketTypesService.updateTicketType(packagesFormData.ticketId, updateData, currentKiosk.id);
                   
                   // Log to audit
-                  const details = packagesFormData.defaultQuantityPerPackage
-                    ? `הוספת ${inputValue} חבילות (${quantity} כרטיסים) ל${packagesFormData.destination === "counter" ? "דלפק" : "כספת"}`
-                    : `הוספת ${quantity} כרטיסים ל${packagesFormData.destination === "counter" ? "דלפק" : "כספת"}`;
-                  
                   await AuditLog.create({
                     action: 'add_inventory',
                     entity_type: 'ticketType',
                     entity_id: packagesFormData.ticketId,
                     entity_name: selectedTicket.name,
-                    details: details,
+                    details: {
+                      ticket_name: selectedTicket.name,
+                      ticket_id: packagesFormData.ticketId,
+                      quantity: quantity,
+                      destination: packagesFormData.destination,
+                      destination_name: packagesFormData.destination === "counter" ? "דלפק" : "כספת",
+                      packages: packagesFormData.defaultQuantityPerPackage ? inputValue : null,
+                      quantity_per_package: packagesFormData.defaultQuantityPerPackage || null,
+                      is_opened: packagesFormData.destination === "counter" ? packagesFormData.is_opened : null,
+                      quantity_before_counter: currentCounter,
+                      quantity_after_counter: packagesFormData.destination === "counter" ? currentCounter + quantity : currentCounter,
+                      quantity_before_vault: currentVault,
+                      quantity_after_vault: packagesFormData.destination === "vault" ? currentVault + quantity : currentVault,
+                      message: packagesFormData.defaultQuantityPerPackage
+                        ? `הוספו ${inputValue} חבילות (${quantity} כרטיסים) ל${packagesFormData.destination === "counter" ? "דלפק" : "כספת"}`
+                        : `הוספו ${quantity} כרטיסים ל${packagesFormData.destination === "counter" ? "דלפק" : "כספת"}`
+                    },
                     user_id: user?.id,
                     user_name: user?.full_name || user?.email,
                   });

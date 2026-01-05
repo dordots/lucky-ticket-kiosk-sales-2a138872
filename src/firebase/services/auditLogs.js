@@ -67,21 +67,47 @@ export const createAuditLog = async (auditLogData) => {
   try {
     // Get current user to determine kiosk_id if not provided
     let kioskId = auditLogData.kiosk_id;
+    let actorId = auditLogData.actor_id;
+    let actorName = auditLogData.actor_name;
     
-    if (!kioskId) {
+    if (!kioskId || !actorId || !actorName) {
       const { getCurrentUser } = await import('./auth');
       const currentUser = await getCurrentUser();
       if (currentUser) {
-        kioskId = currentUser.kiosk_id;
+        if (!kioskId) {
+          kioskId = currentUser.kiosk_id;
+        }
+        if (!actorId) {
+          actorId = auditLogData.user_id || currentUser.id || currentUser.uid;
+        }
+        if (!actorName) {
+          actorName = auditLogData.user_name || currentUser.full_name || currentUser.email;
+        }
       }
+    }
+    
+    // Support legacy user_id/user_name fields - convert to actor_id/actor_name
+    if (!actorId && auditLogData.user_id) {
+      actorId = auditLogData.user_id;
+    }
+    if (!actorName && auditLogData.user_name) {
+      actorName = auditLogData.user_name;
     }
     
     const auditLogsRef = collection(db, COLLECTION_NAME);
     const newAuditLog = {
       ...auditLogData,
+      // Always use actor_id and actor_name (convert from user_id/user_name if needed)
+      actor_id: actorId,
+      actor_name: actorName,
       kiosk_id: kioskId, // Always include kiosk_id
       created_date: Timestamp.now()
     };
+    
+    // Remove legacy fields if they exist
+    delete newAuditLog.user_id;
+    delete newAuditLog.user_name;
+    
     const docRef = await addDoc(auditLogsRef, newAuditLog);
     return {
       id: docRef.id,

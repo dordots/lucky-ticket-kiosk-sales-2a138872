@@ -34,6 +34,10 @@ const actionConfig = {
   create_ticket_type: { label: "יצירת סוג כרטיס", icon: Plus, color: "bg-emerald-100 text-emerald-700" },
   edit_ticket_type: { label: "עריכת סוג כרטיס", icon: Edit, color: "bg-amber-100 text-amber-700" },
   delete_ticket_type: { label: "מחיקת סוג כרטיס", icon: Trash2, color: "bg-red-100 text-red-700" },
+  open_tickets: { label: "פתיחת כרטיסים", icon: Package, color: "bg-blue-100 text-blue-700" },
+  add_inventory: { label: "הוספת מלאי", icon: Plus, color: "bg-green-100 text-green-700" },
+  transfer_inventory: { label: "העברת מלאי", icon: Package, color: "bg-indigo-100 text-indigo-700" },
+  complete_onboarding: { label: "השלמת און-בורדינג", icon: FileText, color: "bg-emerald-100 text-emerald-700" },
 };
 
 // Helper function to format details in Hebrew - professional display
@@ -48,6 +52,7 @@ const formatDetails = (details, actionType = null) => {
     quantity: 'כמות',
     ticket_type_id: 'מזהה כרטיס',
     ticket_name: 'שם כרטיס',
+    ticket_id: 'מזהה כרטיס',
     unit_price: 'מחיר יחידה',
     price: 'מחיר',
     name: 'שם',
@@ -66,6 +71,27 @@ const formatDetails = (details, actionType = null) => {
     nickname: 'כינוי',
     default_quantity_per_package: 'כמות בחבילה',
     color: 'צבע',
+    // New fields for specific actions
+    quantity_opened: 'כמות שנפתחה',
+    from: 'ממקום',
+    to: 'למקום',
+    destination: 'יעד',
+    destination_name: 'שם יעד',
+    packages: 'מספר חבילות',
+    quantity_per_package: 'כמות בחבילה',
+    is_opened: 'נפתחו',
+    quantity_before_counter: 'כמות בדלפק לפני',
+    quantity_after_counter: 'כמות בדלפק אחרי',
+    quantity_before_vault: 'כמות בכספת לפני',
+    quantity_after_vault: 'כמות בכספת אחרי',
+    user_id: 'מזהה משתמש',
+    user_name: 'שם משתמש',
+    user_email: 'אימייל משתמש',
+    commission_rate: 'עמלה (%)',
+    commission_set: 'עמלה הוגדרה',
+    tickets_with_inventory: 'מספר כרטיסים עם מלאי',
+    onboarding_completed_date: 'תאריך השלמה',
+    message: 'הודעה',
   };
 
   const paymentMethodLabels = {
@@ -85,11 +111,23 @@ const formatDetails = (details, actionType = null) => {
     if (key === 'ticket_category') {
       return categoryLabels[value] || value;
     }
-    if (key === 'is_active') {
+    if (key === 'is_active' || key === 'is_opened' || key === 'commission_set') {
       return value ? 'כן' : 'לא';
+    }
+    if (key === 'from') {
+      return value === 'vault' ? 'כספת' : value === 'counter' ? 'דלפק' : value;
+    }
+    if (key === 'to') {
+      return value === 'vault' ? 'כספת' : value === 'counter' ? 'דלפק' : value;
+    }
+    if (key === 'destination') {
+      return value === 'vault' ? 'כספת' : value === 'counter' ? 'דלפק' : value;
     }
     if (key === 'image_url' && typeof value === 'string' && value.length > 50) {
       return value.substring(0, 50) + '...';
+    }
+    if (key === 'commission_rate' && typeof value === 'number') {
+      return `${value}%`;
     }
     if (Array.isArray(value)) {
       // For items array in sales - show summary
@@ -165,8 +203,13 @@ const formatDetails = (details, actionType = null) => {
   };
 
   // Filter out technical/internal fields that aren't important
+  // Include message field for all actions
   const importantFields = ['total', 'total_amount', 'payment_method', 'items', 'quantity', 'old_quantity', 'new_quantity', 
-    'name', 'ticket_name', 'code', 'price', 'unit_price', 'is_active', 'ticket_category', 'nickname'];
+    'name', 'ticket_name', 'ticket_id', 'code', 'price', 'unit_price', 'is_active', 'ticket_category', 'nickname',
+    'quantity_opened', 'from', 'to', 'destination', 'destination_name', 'packages', 'quantity_per_package', 'is_opened',
+    'quantity_before_counter', 'quantity_after_counter', 'quantity_before_vault', 'quantity_after_vault',
+    'user_name', 'user_email', 'commission_rate', 'commission_set', 'tickets_with_inventory', 
+    'onboarding_completed_date', 'message'];
   
   const filteredEntries = Object.entries(details).filter(([key]) => 
     importantFields.includes(key) || Object.keys(details).length <= 8
@@ -307,7 +350,7 @@ export default function AuditLog() {
                         )}
                       </div>
                       <p className="text-sm text-foreground">
-                        <strong>{log.actor_name || "משתמש לא ידוע"}</strong>
+                        <strong>{log.actor_name || log.user_name || "משתמש לא ידוע"}</strong>
                         {log.target_type && ` • ${log.target_type}`}
                       </p>
                       {log.reason && (
@@ -394,7 +437,7 @@ export default function AuditLog() {
                 </div>
                 <div>
                   <p className="text-sm text-muted-foreground">משתמש</p>
-                  <p className="font-medium text-foreground">{selectedLog.actor_name || "לא ידוע"}</p>
+                  <p className="font-medium text-foreground">{selectedLog.actor_name || selectedLog.user_name || "לא ידוע"}</p>
                 </div>
                 {selectedLog.target_type && (
                   <div>
