@@ -142,8 +142,14 @@ export default function Inventory() {
       }
       try {
         const result = await ticketTypesService.getTicketTypesByKiosk(currentKiosk.id);
-        console.log('Inventory: Loaded tickets:', result.length, 'for kiosk:', currentKiosk.id);
-        return result;
+        // Filter to show only tickets that have inventory for this kiosk (have entry in amount map)
+        const ticketsWithInventory = result.filter(ticket => {
+          const amount = ticket.amount || {};
+          // Only show tickets that have an entry in the amount map for this kiosk
+          return amount.hasOwnProperty(currentKiosk.id);
+        });
+        console.log('Inventory: Loaded tickets:', ticketsWithInventory.length, 'with inventory for kiosk:', currentKiosk.id);
+        return ticketsWithInventory;
       } catch (error) {
         console.error('Inventory: Error loading tickets:', error);
         return [];

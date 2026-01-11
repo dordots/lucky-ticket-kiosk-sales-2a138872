@@ -428,7 +428,7 @@ export default function SellerPOS() {
               onUpdateQuantity={handleUpdateQuantity}
               onRemove={handleRemoveItem}
               onClear={handleClearCart}
-              total={calculateTotal()}
+              total={calculateTotal}
             />
           </div>
 

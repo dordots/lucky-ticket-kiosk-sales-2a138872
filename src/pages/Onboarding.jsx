@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { auth, TicketType, AuditLog } from "@/api/entities";
@@ -13,7 +13,8 @@ import {
   ArrowLeft, 
   Loader2,
   AlertCircle,
-  Sparkles
+  Sparkles,
+  Search
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -35,6 +36,7 @@ export default function Onboarding() {
   const [inventoryData, setInventoryData] = useState({});
   const [commissionRate, setCommissionRate] = useState("");
   const [skipCommission, setSkipCommission] = useState(false);
+  const [searchTerm, setSearchTerm] = useState("");
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const { currentKiosk, isLoading: kioskLoading } = useKiosk();
@@ -104,10 +106,13 @@ export default function Onboarding() {
         throw new Error('לא ניתן לשמור ללא קיוסק נבחר');
       }
 
-      // Validate at least one ticket has inventory
+      // Validate at least one ticket has inventory (only what was entered, not 0)
       const hasInventory = Object.values(inventoryData).some(data => {
-        const counter = parseInt(data.quantity_counter) || 0;
-        const vault = parseInt(data.quantity_vault) || 0;
+        const counterStr = data.quantity_counter?.toString().trim() || "";
+        const vaultStr = data.quantity_vault?.toString().trim() || "";
+        // Only count if field was actually filled (not empty string)
+        const counter = counterStr !== "" ? parseInt(counterStr) || 0 : 0;
+        const vault = vaultStr !== "" ? parseInt(vaultStr) || 0 : 0;
         return counter > 0 || vault > 0;
       });
 
@@ -115,15 +120,24 @@ export default function Onboarding() {
         throw new Error('יש להזין מלאי לפחות לכרטיס אחד');
       }
 
-      // Update all tickets
+      // Update only tickets that were entered (not empty fields)
       const updates = [];
       for (const [ticketId, data] of Object.entries(inventoryData)) {
         const ticket = tickets.find(t => t.id === ticketId);
         if (!ticket) continue;
         
+        // Only process if field was actually filled (not empty string)
+        const counterStr = data.quantity_counter?.toString().trim() || "";
+        const vaultStr = data.quantity_vault?.toString().trim() || "";
+        
+        // Skip if both fields are empty
+        if (counterStr === "" && vaultStr === "") {
+          continue;
+        }
+        
         // If default_quantity_per_package exists, multiply by it, otherwise use value directly
-        const counterInput = parseInt(data.quantity_counter) || 0;
-        const vaultInput = parseInt(data.quantity_vault) || 0;
+        const counterInput = counterStr !== "" ? (parseInt(counterStr) || 0) : 0;
+        const vaultInput = vaultStr !== "" ? (parseInt(vaultStr) || 0) : 0;
         
         const counter = ticket.default_quantity_per_package 
           ? counterInput * ticket.default_quantity_per_package 
@@ -133,6 +147,7 @@ export default function Onboarding() {
           : vaultInput;
         const isOpened = data.is_opened;
 
+        // Only update if there's actual inventory (counter or vault > 0)
         if (counter > 0 || vault > 0) {
           updates.push(
             ticketTypesService.updateTicketType(ticketId, {
@@ -245,6 +260,36 @@ export default function Onboarding() {
     }
   };
 
+  // Filter and sort tickets for inventory step
+  const filteredAndSortedTickets = useMemo(() => {
+    if (currentStep !== STEPS.INVENTORY) return [];
+    
+    // Filter tickets by search term
+    const filtered = tickets.filter(ticket => {
+      if (!searchTerm.trim()) return true;
+      const searchLower = searchTerm.toLowerCase();
+      return ticket.name?.toLowerCase().includes(searchLower) ||
+             ticket.code?.toLowerCase().includes(searchLower) ||
+             ticket.nickname?.toLowerCase().includes(searchLower);
+    });
+
+    // Sort: first by price (low to high), then by name (A-Z)
+    return filtered.sort((a, b) => {
+      const priceA = a.price || 0;
+      const priceB = b.price || 0;
+      
+      // First sort by price
+      if (priceA !== priceB) {
+        return priceA - priceB;
+      }
+      
+      // If prices are equal, sort by name (A-Z)
+      const nameA = a.name?.toLowerCase() || "";
+      const nameB = b.name?.toLowerCase() || "";
+      return nameA.localeCompare(nameB, 'he');
+    });
+  }, [tickets, searchTerm, currentStep]);
+
   const progress = ((currentStep - 1) / (Object.keys(STEPS).length - 1)) * 100;
 
   if (!user || kioskLoading) {
@@ -345,8 +390,21 @@ export default function Onboarding() {
                   <div className="text-center mb-6">
                     <h2 className="text-2xl font-bold text-foreground mb-2">הגדרת מלאי התחלתי</h2>
                     <p className="text-muted-foreground">
-                      הזינו את הכמויות ההתחלתיות של כל כרטיס. ניתן להזין 0 אם אין לכם מלאי של כרטיס מסוים.
+                      הזינו את הכמויות ההתחלתיות של כל כרטיס. מה שלא מוזן לא נכנס למלאי.
                     </p>
+                  </div>
+
+                  {/* Search Bar */}
+                  <div className="mb-4">
+                    <div className="relative max-w-md mx-auto">
+                      <Search className="absolute right-3 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
+                      <Input
+                        placeholder="חיפוש לפי שם, קוד או כינוי..."
+                        value={searchTerm}
+                        onChange={(e) => setSearchTerm(e.target.value)}
+                        className="pr-10"
+                      />
+                    </div>
                   </div>
 
                   {ticketsLoading ? (
@@ -362,7 +420,7 @@ export default function Onboarding() {
                     </Alert>
                   ) : (
                     <div className="space-y-4 max-h-[500px] overflow-y-auto pr-2">
-                      {tickets.map((ticket) => {
+                      {filteredAndSortedTickets.map((ticket) => {
                         const data = inventoryData[ticket.id] || {
                           quantity_counter: "",
                           quantity_vault: "",

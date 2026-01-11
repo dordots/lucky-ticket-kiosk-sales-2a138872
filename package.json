@@ -13,6 +13,7 @@
     "seed-multi-kiosk": "node scripts/seed-multi-kiosk.js",
     "import-pais-all-kiosks": "node scripts/import-pais-tickets-all-kiosks.js",
     "delete-all-tickets": "node scripts/delete-all-tickets.js",
+    "clear-kiosk-inventory": "node scripts/clear-kiosk-inventory.js",
     "migrate": "node scripts/migrate-to-multi-kiosk.js",
     "add-assistant-permissions": "node scripts/add-assistant-permissions.js"
   },
