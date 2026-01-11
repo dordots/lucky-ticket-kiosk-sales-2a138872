@@ -64,6 +64,12 @@ import {
   CommandGroup,
   CommandItem,
 } from "@/components/ui/command";
+import {
+  Tabs,
+  TabsList,
+  TabsTrigger,
+  TabsContent,
+} from "@/components/ui/tabs";
 // Toast removed
 
 const colorOptions = [
@@ -88,6 +94,7 @@ export default function Inventory() {
   const [searchTerm, setSearchTerm] = useState("");
   const [addTicketSearch, setAddTicketSearch] = useState("");
   const [addTicketOpen, setAddTicketOpen] = useState(false);
+  const [activeTab, setActiveTab] = useState("counter"); // "counter" or "vault"
   const [dialogOpen, setDialogOpen] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [selectedTicket, setSelectedTicket] = useState(null);
@@ -130,7 +137,6 @@ export default function Inventory() {
   const [sortBy, setSortBy] = useState("name"); // name, price, quantity_counter, quantity_vault, total_quantity
   const [sortOrder, setSortOrder] = useState("asc"); // asc, desc
   const [advancedFilters, setAdvancedFilters] = useState({
-    status: "all", // all, active, inactive
     stockStatus: "all", // all, inStock, lowStock, outOfStock
     priceRange: "all", // all, 0-25, 25-50, 50-100, 100+
     needsOpening: "all", // all, yes, no
@@ -545,8 +551,6 @@ export default function Inventory() {
 
   // Calculate statistics
   const totalTickets = tickets.length;
-  const activeTickets = tickets.filter(t => t.is_active !== false).length;
-  const inactiveTickets = tickets.filter(t => t.is_active === false).length;
 
   const filteredTickets = useMemo(() => {
     return tickets.filter(t => {
@@ -558,13 +562,8 @@ export default function Inventory() {
       t.nickname?.toLowerCase().includes(searchLower);
     if (!matchesSearch) return false;
     
-    // Advanced filters - Status
-    if (advancedFilters.status !== "all") {
-      if (advancedFilters.status === "active" && t.is_active === false) return false;
-      if (advancedFilters.status === "inactive" && t.is_active !== false) return false;
-    }
-    
     // Advanced filters - Stock Status (based on quantity_counter only)
+    // Note: Status filter (active/inactive) removed - replaced by tabs
     if (advancedFilters.stockStatus !== "all") {
       const quantityCounter = t.quantity_counter ?? 0;
       const threshold = t.min_threshold || 10;
@@ -601,9 +600,21 @@ export default function Inventory() {
     });
   }, [tickets, searchTerm, advancedFilters]);
 
+  // Filter tickets by active tab (counter or vault)
+  const tabFilteredTickets = useMemo(() => {
+    return filteredTickets.filter(ticket => {
+      if (activeTab === "counter") {
+        return (ticket.quantity_counter ?? 0) > 0;
+      } else if (activeTab === "vault") {
+        return (ticket.quantity_vault ?? 0) > 0;
+      }
+      return true;
+    });
+  }, [filteredTickets, activeTab]);
+
   // Sort filtered tickets
   const sortedTickets = useMemo(() => {
-    return [...filteredTickets].sort((a, b) => {
+    return [...tabFilteredTickets].sort((a, b) => {
     let aValue, bValue;
     
     switch (sortBy) {
@@ -640,9 +651,9 @@ export default function Inventory() {
       return sortOrder === "asc" ? aValue - bValue : bValue - aValue;
     }
     });
-  }, [filteredTickets, sortBy, sortOrder]);
+  }, [tabFilteredTickets, sortBy, sortOrder]);
 
-  const hasActiveFilters = advancedFilters.status !== "all" || 
+  const hasActiveFilters = 
                            advancedFilters.stockStatus !== "all" || 
                            advancedFilters.priceRange !== "all" ||
                            advancedFilters.needsOpening !== "all" ||
@@ -650,7 +661,6 @@ export default function Inventory() {
 
   const clearAdvancedFilters = () => {
     setAdvancedFilters({
-      status: "all",
       stockStatus: "all",
       priceRange: "all",
       needsOpening: "all",
@@ -778,7 +788,7 @@ export default function Inventory() {
       </div>
 
       {/* Statistics Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-1 gap-4">
         <Card className="bg-gradient-to-br from-indigo-500 to-purple-600 text-white">
           <CardContent className="p-4">
             <div className="flex items-center justify-between">
@@ -787,28 +797,6 @@ export default function Inventory() {
                 <p className="text-3xl font-bold">{totalTickets}</p>
               </div>
               <Package className="h-8 w-8 text-indigo-200" />
-            </div>
-          </CardContent>
-        </Card>
-        <Card className="bg-gradient-to-br from-emerald-500 to-teal-600 text-white">
-          <CardContent className="p-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-emerald-100 text-sm mb-1">כרטיסים פעילים</p>
-                <p className="text-3xl font-bold">{activeTickets}</p>
-              </div>
-              <Check className="h-8 w-8 text-emerald-200" />
-            </div>
-          </CardContent>
-        </Card>
-        <Card className="bg-gradient-to-br from-slate-400 to-slate-600 text-white">
-          <CardContent className="p-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-slate-200 text-sm mb-1">לא פעילים</p>
-                <p className="text-3xl font-bold">{inactiveTickets}</p>
-              </div>
-              <X className="h-8 w-8 text-slate-200" />
             </div>
           </CardContent>
         </Card>
@@ -896,23 +884,6 @@ export default function Inventory() {
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
               <div className="space-y-2">
-                <Label>סטטוס</Label>
-                <Select
-                  value={advancedFilters.status}
-                  onValueChange={(value) => setAdvancedFilters({ ...advancedFilters, status: value })}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="כל הסטטוסים" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">כל הסטטוסים</SelectItem>
-                    <SelectItem value="active">פעיל</SelectItem>
-                    <SelectItem value="inactive">לא פעיל</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div className="space-y-2">
                 <Label>מצב מלאי</Label>
                 <Select
                   value={advancedFilters.stockStatus}
@@ -994,8 +965,22 @@ export default function Inventory() {
         </Card>
       )}
 
-      {/* Tickets Grid */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+      {/* Tabs for Counter/Vault */}
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+        <TabsList className="grid w-full grid-cols-2">
+          <TabsTrigger value="counter" className="flex items-center gap-2">
+            <Package className="h-4 w-4" />
+            דלפק
+          </TabsTrigger>
+          <TabsTrigger value="vault" className="flex items-center gap-2">
+            <Package className="h-4 w-4" />
+            כספת
+          </TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="counter" className="mt-4">
+          {/* Counter Tickets Grid */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
         <AnimatePresence>
           {sortedTickets.map((ticket, index) => {
             const quantityCounter = ticket.quantity_counter ?? 0;
@@ -1069,23 +1054,7 @@ export default function Inventory() {
                           >
                             <Plus className="h-4 w-4" />
                           </Button>
-                          {quantityVault > 0 && (
-                            <Button 
-                              variant="ghost" 
-                              size="icon" 
-                              onClick={() => {
-                                setTransferFormData({ ticketId: ticket.id, quantity: "", is_opened: false });
-                                setTransferDialogOpen(true);
-                              }}
-                              disabled={user?.role === 'assistant' && !hasPermission('inventory_edit')}
-                              title="העבר מכספת לדלפק"
-                            >
-                              <Package className="h-4 w-4 text-blue-500" />
-                            </Button>
-                          )}
-                          {quantityVault === 0 && (
-                            <div className="w-10 h-10"></div>
-                          )}
+                          {/* Transfer button only in vault tab - removed from counter tab */}
                         </div>
                         <div className="flex gap-1">
                           <Button 
@@ -1178,30 +1147,22 @@ export default function Inventory() {
                       </div>
                     )}
                     
-                    {/* Inventory Display */}
+                    {/* Counter Inventory Display - Only counter quantity */}
                     <div className={`flex items-center justify-between p-3 rounded-lg ${
                       isLowStock ? 'bg-amber-900/30' : 'bg-accent'
                     }`}>
                       <div className="flex items-center gap-2">
                         {isLowStock && <AlertTriangle className="h-4 w-4 text-amber-500" />}
                         <Package className="h-4 w-4 text-muted-foreground" />
-                        <span className="text-sm text-foreground">מלאי</span>
+                        <span className="text-sm text-foreground">מלאי בדלפק</span>
                       </div>
                       <div className="flex flex-col items-end gap-1">
                         <div className="flex flex-col items-end gap-0.5">
-                          <span className={`text-xs font-medium ${
+                          <span className={`text-sm font-bold ${
                             quantityCounter === 0 ? 'text-red-600' : 
                             isLowStock ? 'text-amber-500' : 'text-foreground'
                           }`}>
-                            דלפק: {quantityCounter}
-                          </span>
-                          <span className="text-xs text-muted-foreground">
-                            כספת: {quantityVault}
-                          </span>
-                          <span className={`text-sm font-bold ${
-                            totalQuantity === 0 ? 'text-red-600' : 'text-foreground'
-                          }`}>
-                            סה"כ: {totalQuantity}
+                            יחידות: {quantityCounter}
                           </span>
                         </div>
                         <span className="text-xs text-muted-foreground">
@@ -1219,31 +1180,196 @@ export default function Inventory() {
               </motion.div>
             );
           })}
-        </AnimatePresence>
-      </div>
+            </AnimatePresence>
+          </div>
 
-      {sortedTickets.length === 0 && !isLoading && (
-        <div className="text-center py-12 text-muted-foreground">
-          <Package className="h-12 w-12 mx-auto mb-4 opacity-30" />
-          <p className="font-medium">לא נמצאו סוגי כרטיסים</p>
-          <p className="text-sm text-muted-foreground mt-1">לחץ על "הוסף סוג כרטיס" כדי להתחיל</p>
-        </div>
-      )}
+          {sortedTickets.length === 0 && !isLoading && (
+            <div className="text-center py-12 text-muted-foreground">
+              <Package className="h-12 w-12 mx-auto mb-4 opacity-30" />
+              <p className="font-medium">לא נמצאו כרטיסים בדלפק</p>
+              <p className="text-sm text-muted-foreground mt-1">אין כרטיסים עם מלאי בדלפק</p>
+            </div>
+          )}
 
-      {isLoading && (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-          {[1, 2, 3, 4].map((i) => (
-            <Card key={i} className="animate-pulse">
-              <div className="h-2 bg-accent" />
-              <CardContent className="p-4">
-                <div className="h-4 w-24 bg-accent rounded mb-2" />
-                <div className="h-6 w-16 bg-accent rounded mb-3" />
-                <div className="h-12 bg-accent rounded" />
-              </CardContent>
-            </Card>
-          ))}
-        </div>
-      )}
+          {isLoading && (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+              {[1, 2, 3, 4].map((i) => (
+                <Card key={i} className="animate-pulse">
+                  <div className="h-2 bg-accent" />
+                  <CardContent className="p-4">
+                    <div className="h-4 w-24 bg-accent rounded mb-2" />
+                    <div className="h-6 w-16 bg-accent rounded mb-3" />
+                    <div className="h-12 bg-accent rounded" />
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          )}
+        </TabsContent>
+
+        <TabsContent value="vault" className="mt-4">
+          {/* Vault Tickets Grid */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            <AnimatePresence>
+              {sortedTickets.map((ticket, index) => {
+                const quantityCounter = ticket.quantity_counter ?? 0;
+                const quantityVault = ticket.quantity_vault ?? 0;
+                const totalQuantity = quantityCounter + quantityVault;
+                const isLowStock = quantityVault <= (ticket.min_threshold || 10);
+                const needsOpening = quantityCounter > 0 && !ticket.is_opened;
+                const colorClass = colorOptions.find(c => c.value === ticket.color)?.class || "bg-blue-500";
+                
+                return (
+                  <motion.div
+                    key={ticket.id}
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, scale: 0.9 }}
+                    transition={{ delay: index * 0.05 }}
+                  >
+                    <Card className={`relative overflow-hidden ${!ticket.is_active ? 'opacity-60' : ''}`}>
+                      {/* Color Strip or Image */}
+                      {ticket.image_url ? (
+                        <div className="h-32 w-full overflow-hidden">
+                          <img 
+                            src={ticket.image_url} 
+                            alt={ticket.name}
+                            className="w-full h-full object-cover"
+                            loading="lazy"
+                            width="100%"
+                            height="128"
+                            onError={(e) => {
+                              e.target.style.display = 'none';
+                              e.target.parentElement.innerHTML = `<div class="h-2 ${colorClass}"></div>`;
+                            }}
+                          />
+                        </div>
+                      ) : (
+                        <div className={`h-2 ${colorClass}`} />
+                      )}
+                      
+                      <CardContent className="p-4">
+                        <div className="flex items-start justify-between mb-3">
+                          <div className="flex-1">
+                            <div className="flex items-center gap-2 mb-1">
+                              <div>
+                                <h3 className="font-bold text-foreground">{ticket.name}</h3>
+                                {ticket.nickname && (
+                                  <p className="text-xs text-muted-foreground">"{ticket.nickname}"</p>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center justify-between mb-3">
+                          <span className="text-2xl font-bold text-primary">₪{ticket.price}</span>
+                          {!ticket.is_active && (
+                            <Badge variant="secondary">לא פעיל</Badge>
+                          )}
+                        </div>
+                        
+                        {/* Vault Inventory Display - Only vault quantity */}
+                        <div className={`flex items-center justify-between p-3 rounded-lg ${
+                          isLowStock ? 'bg-amber-900/30' : 'bg-accent'
+                        }`}>
+                          <div className="flex items-center gap-2">
+                            {isLowStock && <AlertTriangle className="h-4 w-4 text-amber-500" />}
+                            <Package className="h-4 w-4 text-muted-foreground" />
+                            <span className="text-sm text-foreground">מלאי בכספת</span>
+                          </div>
+                          <div className="flex flex-col items-end gap-1">
+                            <div className="flex flex-col items-end gap-0.5">
+                              <span className={`text-sm font-bold ${
+                                quantityVault === 0 ? 'text-red-600' : 
+                                isLowStock ? 'text-amber-500' : 'text-foreground'
+                              }`}>
+                                יחידות: {quantityVault}
+                              </span>
+                            </div>
+                            <span className="text-xs text-muted-foreground">
+                              מינימום: {ticket.min_threshold}
+                            </span>
+                            {ticket.default_quantity_per_package && (
+                              <span className="text-xs text-green-600 dark:text-green-400 font-medium">
+                                {ticket.default_quantity_per_package} כרטיסים בחבילה
+                              </span>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* Actions */}
+                        <div className="flex items-center justify-between gap-2 mt-3">
+                          <div className="flex gap-1">
+                            {quantityVault > 0 && (
+                              <Button 
+                                variant="ghost" 
+                                size="icon" 
+                                onClick={() => {
+                                  setTransferFormData({ ticketId: ticket.id, quantity: "", is_opened: false });
+                                  setTransferDialogOpen(true);
+                                }}
+                                disabled={user?.role === 'assistant' && !hasPermission('inventory_edit')}
+                                title="העבר מכספת לדלפק"
+                              >
+                                <Package className="h-4 w-4 text-blue-500" />
+                              </Button>
+                            )}
+                            {quantityVault === 0 && (
+                              <div className="w-10 h-10"></div>
+                            )}
+                          </div>
+                          <div className="flex gap-1">
+                            <Button 
+                              variant="ghost" 
+                              size="icon" 
+                              onClick={() => handleEdit(ticket)}
+                              disabled={user?.role === 'assistant' && !hasPermission('inventory_edit')}
+                            >
+                              <Edit className="h-4 w-4 text-muted-foreground" />
+                            </Button>
+                            <Button 
+                              variant="ghost" 
+                              size="icon" 
+                              onClick={() => handleDelete(ticket)}
+                              disabled={user?.role === 'assistant' && !hasPermission('inventory_delete')}
+                            >
+                              <Trash2 className="h-4 w-4 text-red-400" />
+                            </Button>
+                          </div>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  </motion.div>
+                );
+              })}
+            </AnimatePresence>
+          </div>
+
+          {sortedTickets.length === 0 && !isLoading && (
+            <div className="text-center py-12 text-muted-foreground">
+              <Package className="h-12 w-12 mx-auto mb-4 opacity-30" />
+              <p className="font-medium">לא נמצאו כרטיסים בכספת</p>
+              <p className="text-sm text-muted-foreground mt-1">אין כרטיסים עם מלאי בכספת</p>
+            </div>
+          )}
+
+          {isLoading && (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+              {[1, 2, 3, 4].map((i) => (
+                <Card key={i} className="animate-pulse">
+                  <div className="h-2 bg-accent" />
+                  <CardContent className="p-4">
+                    <div className="h-4 w-24 bg-accent rounded mb-2" />
+                    <div className="h-6 w-16 bg-accent rounded mb-3" />
+                    <div className="h-12 bg-accent rounded" />
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          )}
+        </TabsContent>
+      </Tabs>
 
       {/* Add/Edit Dialog */}
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
