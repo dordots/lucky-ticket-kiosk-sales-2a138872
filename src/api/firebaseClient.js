@@ -47,6 +47,9 @@ export const firebase = {
       },
       delete: (id) => {
         return ticketTypesService.deleteTicketType(id);
+      },
+      removeKioskInventory: (id, kioskId) => {
+        return ticketTypesService.removeKioskInventory(id, kioskId);
       }
     },
     User: {

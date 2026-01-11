@@ -43,6 +43,12 @@ const statusLabels = {
 
 export default function SaleDetails() {
   const [user, setUser] = useState(null);
+  const hasPermission = (perm) => {
+    if (!user) return false;
+    if (user.role !== 'assistant') return true;
+    if (!perm) return true;
+    return Array.isArray(user.permissions) ? user.permissions.includes(perm) : false;
+  };
   
   const urlParams = new URLSearchParams(window.location.search);
   const saleId = urlParams.get('id');
@@ -75,6 +81,15 @@ export default function SaleDetails() {
   });
 
   const isOwner = user?.position === 'owner' || user?.role === 'admin';
+  
+  // Check cancel permissions
+  const canCancelOwn = user?.role !== 'assistant' || hasPermission('sales_cancel_own');
+  const canCancelAll = user?.role !== 'assistant' || hasPermission('sales_cancel_all');
+  
+  // Check if user can cancel this specific sale
+  const canCancelThisSale = isOwner || 
+    canCancelAll || 
+    (canCancelOwn && sale?.seller_id === user?.id);
 
   if (isLoading) {
     return (
@@ -113,26 +128,32 @@ export default function SaleDetails() {
             <p className="text-muted-foreground text-sm">מזהה: {sale.id?.slice(0, 8)}...</p>
           </div>
         </div>
-        {isOwner && sale.status === 'completed' && (
+        {sale.status === 'completed' && (
           <div className="flex gap-2">
-            <Link to={createPageUrl(`EditSale?id=${sale.id}`)}>
-              <Button variant="outline">
-                <Edit className="h-4 w-4 ml-2" />
-                עריכה
-              </Button>
-            </Link>
-            <Link to={createPageUrl(`CancelSale?id=${sale.id}`)}>
-              <Button variant="outline" className="text-amber-600 border-amber-200 hover:bg-amber-50">
-                <XCircle className="h-4 w-4 ml-2" />
-                ביטול
-              </Button>
-            </Link>
-            <Link to={createPageUrl(`DeleteSale?id=${sale.id}`)}>
-              <Button variant="outline" className="text-red-600 border-red-200 hover:bg-red-50">
-                <Trash2 className="h-4 w-4 ml-2" />
-                מחיקה
-              </Button>
-            </Link>
+            {isOwner && (
+              <Link to={createPageUrl(`EditSale?id=${sale.id}`)}>
+                <Button variant="outline">
+                  <Edit className="h-4 w-4 ml-2" />
+                  עריכה
+                </Button>
+              </Link>
+            )}
+            {canCancelThisSale && (
+              <Link to={createPageUrl(`CancelSale?id=${sale.id}`)}>
+                <Button variant="outline" className="text-amber-600 border-amber-200 hover:bg-amber-50">
+                  <XCircle className="h-4 w-4 ml-2" />
+                  ביטול
+                </Button>
+              </Link>
+            )}
+            {isOwner && (
+              <Link to={createPageUrl(`DeleteSale?id=${sale.id}`)}>
+                <Button variant="outline" className="text-red-600 border-red-200 hover:bg-red-50">
+                  <Trash2 className="h-4 w-4 ml-2" />
+                  מחיקה
+                </Button>
+              </Link>
+            )}
           </div>
         )}
       </div>

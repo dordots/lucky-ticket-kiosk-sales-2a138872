@@ -266,7 +266,7 @@ export default function Inventory() {
   });
 
   const deleteMutation = useMutation({
-    mutationFn: (id) => TicketType.delete(id),
+    mutationFn: ({ id, kioskId }) => TicketType.removeKioskInventory(id, kioskId),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['tickets-inventory', currentKiosk?.id] });
       queryClient.invalidateQueries({ queryKey: ['tickets-dashboard', currentKiosk?.id] });
@@ -276,6 +276,25 @@ export default function Inventory() {
       // Toast notification removed
     },
   });
+
+  // Check permissions for viewing counter/vault tabs
+  const canViewCounter = user?.role !== 'assistant' || hasPermission('inventory_view_counter');
+  const canViewVault = user?.role !== 'assistant' || hasPermission('inventory_view_vault');
+  
+  // Check permissions for actions on counter/vault (edit is location-specific)
+  const canEditCounter = user?.role !== 'assistant' || hasPermission('inventory_edit_counter');
+  const canEditVault = user?.role !== 'assistant' || hasPermission('inventory_edit_vault');
+  
+  // Check permissions for adding stock to counter/vault
+  const canAddStockCounter = user?.role !== 'assistant' || hasPermission('inventory_add_stock_counter');
+  const canAddStockVault = user?.role !== 'assistant' || hasPermission('inventory_add_stock_vault');
+  
+  // Check permission for transferring from vault to counter
+  const canTransferVaultToCounter = user?.role !== 'assistant' || hasPermission('inventory_transfer_vault_to_counter');
+  
+  // Check permissions for general actions (add/delete are not location-specific)
+  const canAdd = user?.role !== 'assistant' || hasPermission('inventory_add');
+  const canDelete = user?.role !== 'assistant' || hasPermission('inventory_delete');
 
   const resetForm = () => {
     setFormData({
@@ -299,7 +318,11 @@ export default function Inventory() {
   };
 
   const handleEdit = (ticket) => {
-    if (user?.role === 'assistant' && !hasPermission('inventory_edit')) return;
+    // Check permission based on which tab we're in
+    if (user?.role === 'assistant') {
+      const canEdit = activeTab === 'counter' ? canEditCounter : canEditVault;
+      if (!canEdit) return;
+    }
     setSelectedTicket(ticket);
     setFormData({
       name: ticket.name,
@@ -322,18 +345,28 @@ export default function Inventory() {
   };
 
   const handleDelete = (ticket) => {
-    if (user?.role === 'assistant' && !hasPermission('inventory_delete')) return;
+    // Delete is not location-specific, check general permission
+    if (user?.role === 'assistant' && !canDelete) return;
     setSelectedTicket(ticket);
     setDeleteDialogOpen(true);
   };
 
   const handleSubmit = async () => {
-    // Permission gate: assistants need specific perms for add/edit
+    // Permission gate: assistants need specific perms
     if (user?.role === 'assistant') {
-      const needed = selectedTicket ? 'inventory_edit' : 'inventory_add';
-      if (!hasPermission(needed)) {
-        alert('אין לך הרשאה לפעולה זו');
-        return;
+      if (selectedTicket) {
+        // Edit: check permission based on which tab we're in
+        const canEdit = activeTab === 'counter' ? canEditCounter : canEditVault;
+        if (!canEdit) {
+          alert('אין לך הרשאה לפעולה זו');
+          return;
+        }
+      } else {
+        // Add: general permission (not location-specific)
+        if (!canAdd) {
+          alert('אין לך הרשאה לפעולה זו');
+          return;
+        }
       }
     }
 
@@ -370,6 +403,18 @@ export default function Inventory() {
       if (quantity_counter === 0 && quantity_vault === 0) {
         alert('נא להזין כמות בדלפק או בכספת');
         return;
+      }
+
+      // Check permissions for adding stock
+      if (user?.role === 'assistant') {
+        if (quantity_counter > 0 && !canAddStockCounter) {
+          alert('אין לך הרשאה להוספת מלאי לדלפק');
+          return;
+        }
+        if (quantity_vault > 0 && !canAddStockVault) {
+          alert('אין לך הרשאה להוספת מלאי לכספת');
+          return;
+        }
       }
 
       await TicketType.update(selectedTicket.id, {
@@ -419,29 +464,45 @@ export default function Inventory() {
       code = selectedTicket.code || formData.code;
     }
 
+    // Calculate quantities
+    const calculatedQuantityCounter = (() => {
+      if (formData.counter_units) return parseInt(formData.counter_units) || 0;
+      if (formData.counter_packages) {
+        const packages = parseInt(formData.counter_packages) || 0;
+        const qtyPerPackage = parseInt(formData.default_quantity_per_package) || 1;
+        return packages * qtyPerPackage;
+      }
+      return 0;
+    })();
+    const calculatedQuantityVault = (() => {
+      if (formData.vault_units) return parseInt(formData.vault_units) || 0;
+      if (formData.vault_packages) {
+        const packages = parseInt(formData.vault_packages) || 0;
+        const qtyPerPackage = parseInt(formData.default_quantity_per_package) || 1;
+        return packages * qtyPerPackage;
+      }
+      return 0;
+    })();
+
+    // Check permissions for adding stock (for new tickets or when adding stock to existing)
+    if (user?.role === 'assistant') {
+      if (calculatedQuantityCounter > 0 && !canAddStockCounter) {
+        alert('אין לך הרשאה להוספת מלאי לדלפק');
+        return;
+      }
+      if (calculatedQuantityVault > 0 && !canAddStockVault) {
+        alert('אין לך הרשאה להוספת מלאי לכספת');
+        return;
+      }
+    }
+
     const data = {
       name: formData.name,
       nickname: formData.nickname || null, // Store null if empty
       price: parseFloat(formData.price),
       code: code,
-      quantity_counter: (() => {
-        if (formData.counter_units) return parseInt(formData.counter_units) || 0;
-        if (formData.counter_packages) {
-          const packages = parseInt(formData.counter_packages) || 0;
-          const qtyPerPackage = parseInt(formData.default_quantity_per_package) || 1;
-          return packages * qtyPerPackage;
-        }
-        return 0;
-      })(),
-      quantity_vault: (() => {
-        if (formData.vault_units) return parseInt(formData.vault_units) || 0;
-        if (formData.vault_packages) {
-          const packages = parseInt(formData.vault_packages) || 0;
-          const qtyPerPackage = parseInt(formData.default_quantity_per_package) || 1;
-          return packages * qtyPerPackage;
-        }
-        return 0;
-      })(),
+      quantity_counter: calculatedQuantityCounter,
+      quantity_vault: calculatedQuantityVault,
       default_quantity_per_package: formData.default_quantity_per_package ? parseInt(formData.default_quantity_per_package) : null,
       min_threshold: parseInt(formData.min_threshold) || 10,
         color: formData.use_image ? null : formData.color,
@@ -553,23 +614,31 @@ export default function Inventory() {
   };
 
   const handleConfirmDelete = async () => {
-    if (user?.role === 'assistant' && !hasPermission('inventory_delete')) {
+    // Delete is not location-specific, check general permission
+    if (user?.role === 'assistant' && !canDelete) {
       alert('אין לך הרשאה למחיקה');
       return;
     }
     if (selectedTicket) {
       // Create audit log before delete
       await AuditLog.create({
-        action: "delete_ticket_type",
+        action: "remove_kiosk_inventory",
         actor_id: user?.id,
         actor_name: user?.full_name || user?.email,
         target_id: selectedTicket.id,
         target_type: "TicketType",
-        details: selectedTicket,
+        details: {
+          ticket_name: selectedTicket.name,
+          kiosk_id: currentKiosk?.id,
+          kiosk_name: currentKiosk?.name,
+        },
         kiosk_id: currentKiosk?.id,
       });
       
-      await deleteMutation.mutateAsync(selectedTicket.id);
+      await deleteMutation.mutateAsync({ 
+        id: selectedTicket.id, 
+        kioskId: currentKiosk.id 
+      });
     }
   };
 
@@ -616,6 +685,18 @@ export default function Inventory() {
     return true;
     });
   }, [tickets, searchTerm, advancedFilters]);
+
+  // Auto-select available tab if current tab is not accessible
+  useEffect(() => {
+    if (activeTab === "counter" && !canViewCounter && canViewVault) {
+      setActiveTab("vault");
+    } else if (activeTab === "vault" && !canViewVault && canViewCounter) {
+      setActiveTab("counter");
+    } else if (!canViewCounter && !canViewVault) {
+      // If user can't view either tab, default to counter (will show empty state)
+      setActiveTab("counter");
+    }
+  }, [activeTab, canViewCounter, canViewVault]);
 
   // Filter tickets by active tab (counter or vault)
   const tabFilteredTickets = useMemo(() => {
@@ -687,8 +768,8 @@ export default function Inventory() {
     });
   };
 
-  // Permission guard for assistants
-  if (user && user.role === 'assistant' && !hasPermission('inventory_view')) {
+  // Permission guard for assistants - must have permission to view at least one tab
+  if (user && user.role === 'assistant' && !canViewCounter && !canViewVault) {
     return (
       <div className="text-center py-12">
         <p className="text-muted-foreground">אין לך הרשאה לגשת לעמוד זה</p>
@@ -718,7 +799,7 @@ export default function Inventory() {
                 }}
                 onFocus={() => setAddTicketOpen(true)}
                 className="pr-10"
-                disabled={user?.role === 'assistant' && !hasPermission('inventory_add')}
+                disabled={user?.role === 'assistant' && !canAdd}
               />
             </div>
           </PopoverAnchor>
@@ -966,19 +1047,24 @@ export default function Inventory() {
 
       {/* Tabs for Counter/Vault */}
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-        <TabsList className="grid w-full grid-cols-2">
-          <TabsTrigger value="counter" className="flex items-center gap-2">
-            <Package className="h-4 w-4" />
-            דלפק
-          </TabsTrigger>
-          <TabsTrigger value="vault" className="flex items-center gap-2">
-            <Package className="h-4 w-4" />
-            כספת
-          </TabsTrigger>
+        <TabsList className={`grid w-full ${canViewCounter && canViewVault ? 'grid-cols-2' : 'grid-cols-1'}`}>
+          {canViewCounter && (
+            <TabsTrigger value="counter" className="flex items-center gap-2">
+              <Package className="h-4 w-4" />
+              דלפק
+            </TabsTrigger>
+          )}
+          {canViewVault && (
+            <TabsTrigger value="vault" className="flex items-center gap-2">
+              <Package className="h-4 w-4" />
+              כספת
+            </TabsTrigger>
+          )}
         </TabsList>
 
-        <TabsContent value="counter" className="mt-4">
-          {/* Counter Tickets Grid */}
+        {canViewCounter && (
+          <TabsContent value="counter" className="mt-4">
+            {/* Counter Tickets Grid */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
         <AnimatePresence>
           {sortedTickets.map((ticket, index) => {
@@ -1045,7 +1131,7 @@ export default function Inventory() {
                               });
                               setPackagesDialogOpen(true);
                             }}
-                            disabled={user?.role === 'assistant' && !hasPermission('inventory_edit')}
+                            disabled={user?.role === 'assistant' && !(activeTab === 'counter' ? canAddStockCounter : canAddStockVault)}
                             title={ticket.default_quantity_per_package ? "עדכן מלאי לפי חבילות" : "עדכן מלאי"}
                             className={ticket.default_quantity_per_package ? "text-green-600" : ""}
                           >
@@ -1058,7 +1144,7 @@ export default function Inventory() {
                             variant="ghost" 
                             size="icon" 
                             onClick={() => handleEdit(ticket)}
-                            disabled={user?.role === 'assistant' && !hasPermission('inventory_edit')}
+                            disabled={user?.role === 'assistant' && !(activeTab === 'counter' ? canEditCounter : canEditVault)}
                           >
                             <Edit className="h-4 w-4 text-muted-foreground" />
                           </Button>
@@ -1066,7 +1152,7 @@ export default function Inventory() {
                             variant="ghost" 
                             size="icon" 
                             onClick={() => handleDelete(ticket)}
-                            disabled={user?.role === 'assistant' && !hasPermission('inventory_delete')}
+                            disabled={user?.role === 'assistant' && !canDelete}
                           >
                             <Trash2 className="h-4 w-4 text-red-400" />
                           </Button>
@@ -1139,10 +1225,12 @@ export default function Inventory() {
               ))}
             </div>
           )}
-        </TabsContent>
+          </TabsContent>
+        )}
 
-        <TabsContent value="vault" className="mt-4">
-          {/* Vault Tickets Grid */}
+        {canViewVault && (
+          <TabsContent value="vault" className="mt-4">
+            {/* Vault Tickets Grid */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
             <AnimatePresence>
               {sortedTickets.map((ticket, index) => {
@@ -1242,7 +1330,7 @@ export default function Inventory() {
                                   setTransferFormData({ ticketId: ticket.id, quantity: "" });
                                   setTransferDialogOpen(true);
                                 }}
-                                disabled={user?.role === 'assistant' && !hasPermission('inventory_edit')}
+                                disabled={user?.role === 'assistant' && (!canTransferVaultToCounter || !canViewVault)}
                                 title="העבר מכספת לדלפק"
                               >
                                 <Package className="h-4 w-4 text-blue-500" />
@@ -1257,7 +1345,7 @@ export default function Inventory() {
                               variant="ghost" 
                               size="icon" 
                               onClick={() => handleEdit(ticket)}
-                              disabled={user?.role === 'assistant' && !hasPermission('inventory_edit')}
+                              disabled={user?.role === 'assistant' && !(activeTab === 'counter' ? canEditCounter : canEditVault)}
                             >
                               <Edit className="h-4 w-4 text-muted-foreground" />
                             </Button>
@@ -1265,7 +1353,7 @@ export default function Inventory() {
                               variant="ghost" 
                               size="icon" 
                               onClick={() => handleDelete(ticket)}
-                              disabled={user?.role === 'assistant' && !hasPermission('inventory_delete')}
+                              disabled={user?.role === 'assistant' && !canDelete}
                             >
                               <Trash2 className="h-4 w-4 text-red-400" />
                             </Button>
@@ -1301,7 +1389,8 @@ export default function Inventory() {
               ))}
             </div>
           )}
-        </TabsContent>
+          </TabsContent>
+        )}
       </Tabs>
 
       {/* Add/Edit Dialog */}
@@ -1355,7 +1444,10 @@ export default function Inventory() {
                             }}
                             placeholder="0"
                             min="0"
-                            disabled={!!formData.counter_packages && parseInt(formData.counter_packages) > 0}
+                            disabled={
+                              (!!formData.counter_packages && parseInt(formData.counter_packages) > 0) ||
+                              (user?.role === 'assistant' && !canAddStockCounter)
+                            }
                           />
                         </div>
                         <div className="space-y-2">
@@ -1374,7 +1466,10 @@ export default function Inventory() {
                             }}
                             placeholder="0"
                             min="0"
-                            disabled={!!formData.counter_units && parseInt(formData.counter_units) > 0}
+                            disabled={
+                              (!!formData.counter_units && parseInt(formData.counter_units) > 0) ||
+                              (user?.role === 'assistant' && !canAddStockCounter)
+                            }
                           />
                           {selectedTicket.default_quantity_per_package && (
                             <p className="text-xs text-muted-foreground">
@@ -1408,7 +1503,10 @@ export default function Inventory() {
                             }}
                             placeholder="0"
                             min="0"
-                            disabled={!!formData.vault_packages && parseInt(formData.vault_packages) > 0}
+                            disabled={
+                              (!!formData.vault_packages && parseInt(formData.vault_packages) > 0) ||
+                              (user?.role === 'assistant' && !canAddStockVault)
+                            }
                           />
                         </div>
                         <div className="space-y-2">
@@ -1427,7 +1525,10 @@ export default function Inventory() {
                             }}
                             placeholder="0"
                             min="0"
-                            disabled={!!formData.vault_units && parseInt(formData.vault_units) > 0}
+                            disabled={
+                              (!!formData.vault_units && parseInt(formData.vault_units) > 0) ||
+                              (user?.role === 'assistant' && !canAddStockVault)
+                            }
                           />
                           {selectedTicket.default_quantity_per_package && (
                             <p className="text-xs text-muted-foreground">
@@ -1852,6 +1953,14 @@ export default function Inventory() {
                   return;
                 }
                 
+                // Check permission for transfer
+                if (user?.role === 'assistant') {
+                  if (!canTransferVaultToCounter || !canViewVault) {
+                    alert('אין לך הרשאה להעברת מלאי מכספת לדלפק');
+                    return;
+                  }
+                }
+                
                 try {
                   if (!currentKiosk?.id) {
                     alert('לא ניתן להעביר מלאי ללא קיוסק נבחר');
@@ -1911,7 +2020,12 @@ export default function Inventory() {
                   alert('שגיאה בהעברת המלאי: ' + (error.message || 'שגיאה לא ידועה'));
                 }
               }}
-              disabled={!transferFormData.ticketId || !transferFormData.quantity || parseInt(transferFormData.quantity) <= 0}
+              disabled={
+                !transferFormData.ticketId || 
+                !transferFormData.quantity || 
+                parseInt(transferFormData.quantity) <= 0 ||
+                (user?.role === 'assistant' && (!canTransferVaultToCounter || !canViewVault))
+              }
               className="bg-theme-gradient"
             >
               העבר
@@ -1974,8 +2088,18 @@ export default function Inventory() {
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="counter">דלפק</SelectItem>
-                      <SelectItem value="vault">כספת</SelectItem>
+                      <SelectItem 
+                        value="counter" 
+                        disabled={user?.role === 'assistant' && !canAddStockCounter}
+                      >
+                        דלפק
+                      </SelectItem>
+                      <SelectItem 
+                        value="vault" 
+                        disabled={user?.role === 'assistant' && !canAddStockVault}
+                      >
+                        כספת
+                      </SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
@@ -2051,6 +2175,15 @@ export default function Inventory() {
                 const quantity = packagesFormData.defaultQuantityPerPackage 
                   ? inputValue * packagesFormData.defaultQuantityPerPackage 
                   : inputValue;
+                
+                // Check permission based on destination
+                if (user?.role === 'assistant') {
+                  const canAddStock = packagesFormData.destination === "counter" ? canAddStockCounter : canAddStockVault;
+                  if (!canAddStock) {
+                    alert('אין לך הרשאה להוספת מלאי ל' + (packagesFormData.destination === "counter" ? "דלפק" : "כספת"));
+                    return;
+                  }
+                }
                 
                 try {
                   if (!currentKiosk?.id) {

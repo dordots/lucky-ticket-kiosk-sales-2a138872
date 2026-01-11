@@ -303,7 +303,40 @@ export const transferInventoryFromVaultToCounter = async (ticketTypeId, quantity
   }
 };
 
-// Delete ticket type
+// Remove inventory for a specific kiosk (delete kiosk entry from amount map)
+export const removeKioskInventory = async (ticketTypeId, kioskId) => {
+  try {
+    const ticketTypeRef = doc(db, COLLECTION_NAME, ticketTypeId);
+    
+    // Get current ticket data directly from Firestore (raw data, not normalized)
+    const ticketTypeSnap = await getDoc(ticketTypeRef);
+    if (!ticketTypeSnap.exists()) {
+      throw new Error('Ticket type not found');
+    }
+    
+    const ticketData = ticketTypeSnap.data();
+    
+    // Get current amount map from raw data
+    const amount = ticketData.amount || {};
+    
+    // Remove kiosk entry from map using destructuring
+    const { [kioskId]: removed, ...remainingAmount } = amount;
+    
+    // Prepare update
+    const updateData = {
+      amount: remainingAmount,
+      updated_date: Timestamp.now()
+    };
+    
+    await updateDoc(ticketTypeRef, updateData);
+    return await getTicketTypeById(ticketTypeId, kioskId);
+  } catch (error) {
+    console.error('Error removing kiosk inventory:', error);
+    throw error;
+  }
+};
+
+// Delete ticket type (removes entire ticket from system)
 export const deleteTicketType = async (ticketTypeId) => {
   try {
     const ticketTypeRef = doc(db, COLLECTION_NAME, ticketTypeId);

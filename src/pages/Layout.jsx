@@ -100,8 +100,8 @@ export default function Layout({ children, currentPageName }) {
   const navItems = [
     { name: "דף מכירה", icon: ShoppingCart, page: "SellerPOS", roles: ['all'], perm: "sell" },
     { name: "לוח בקרה", icon: LayoutDashboard, page: "Dashboard", roles: ['all', 'owner', 'franchisee'], perm: "dashboard_view" },
-    { name: "מלאי", icon: Package, page: "Inventory", roles: ['owner', 'franchisee'], perm: "inventory_view" },
-    { name: "היסטוריית מכירות", icon: History, page: "SalesHistory", roles: ['all', 'franchisee'], perm: "sales_history_view" },
+    { name: "מלאי", icon: Package, page: "Inventory", roles: ['owner', 'franchisee'], perm: "inventory_view_counter", permAlt: "inventory_view_vault" },
+    { name: "היסטוריית מכירות", icon: History, page: "SalesHistory", roles: ['all', 'franchisee'], perm: "sales_history_view", permAlt: "sales_cancel_own", permAlt2: "sales_cancel_all" },
     { name: "פרטי קיוסק", icon: Store, page: "KioskDetails", roles: ['franchisee'], perm: "kiosk_details_view" },
     { name: "משתמשים", icon: Users, page: "UsersManagement", roles: ['owner', 'franchisee'], perm: "users_view" },
     { name: "קיוסקים", icon: Store, page: "KiosksManagement", roles: ['system_manager'] },
@@ -181,6 +181,14 @@ export default function Layout({ children, currentPageName }) {
       }
       // Hide kiosk self-create page from assistants
       if (item.page === 'KioskSelfCreate') return false;
+      // For inventory, check if user has permission to view either counter or vault
+      if (item.page === 'Inventory' && item.permAlt) {
+        return hasPermission(item.perm) || hasPermission(item.permAlt);
+      }
+      // For sales history, check if user has permission to view or cancel sales
+      if (item.page === 'SalesHistory' && (item.permAlt || item.permAlt2)) {
+        return hasPermission(item.perm) || hasPermission(item.permAlt) || hasPermission(item.permAlt2);
+      }
       return hasPermission(item.perm);
     }
     
@@ -192,8 +200,28 @@ export default function Layout({ children, currentPageName }) {
       }
       // If already has kiosk, hide self-create
       if (item.page === 'KioskSelfCreate') return false;
-      if (item.roles.includes('all')) return true;
-      if (item.roles.includes('owner') || item.roles.includes('franchisee')) return true;
+      if (item.roles.includes('all')) {
+        // For items with 'all' role, check permission if perm is defined
+        if (item.perm) {
+          return hasPermission(item.perm) || hasPermission(item.permAlt) || hasPermission(item.permAlt2);
+        }
+        return true;
+      }
+      if (item.roles.includes('owner') || item.roles.includes('franchisee')) {
+        // For items with permissions, check them
+        if (item.perm) {
+          // For inventory, check if user has permission to view either counter or vault
+          if (item.page === 'Inventory' && item.permAlt) {
+            return hasPermission(item.perm) || hasPermission(item.permAlt) || hasPermission(item.permAlt2);
+          }
+          // For sales history, check if user has permission to view or cancel sales
+          if (item.page === 'SalesHistory' && (item.permAlt || item.permAlt2)) {
+            return hasPermission(item.perm) || hasPermission(item.permAlt) || hasPermission(item.permAlt2);
+          }
+          return hasPermission(item.perm);
+        }
+        return true;
+      }
       return false;
     }
     

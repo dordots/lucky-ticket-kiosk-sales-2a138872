@@ -18,6 +18,12 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
 export default function CancelSale() {
   const [user, setUser] = useState(null);
+  const hasPermission = (perm) => {
+    if (!user) return false;
+    if (user.role !== 'assistant') return true;
+    if (!perm) return true;
+    return Array.isArray(user.permissions) ? user.permissions.includes(perm) : false;
+  };
   
   const urlParams = new URLSearchParams(window.location.search);
   const saleId = urlParams.get('id');
@@ -125,7 +131,24 @@ export default function CancelSale() {
     },
   });
 
+  // Check cancel permissions
+  const isOwner = user?.position === 'owner' || user?.role === 'admin';
+  const canCancelOwn = user?.role !== 'assistant' || hasPermission('sales_cancel_own');
+  const canCancelAll = user?.role !== 'assistant' || hasPermission('sales_cancel_all');
+  
+  // Check if user can cancel this specific sale
+  const canCancelThisSale = sale && (
+    isOwner || 
+    canCancelAll || 
+    (canCancelOwn && sale.seller_id === user?.id)
+  );
+
   const handleCancel = () => {
+    // Double-check permission before cancelling
+    if (!canCancelThisSale) {
+      alert('אין לך הרשאה לבטל מכירה זו');
+      return;
+    }
     cancelMutation.mutate();
   };
 
@@ -154,6 +177,19 @@ export default function CancelSale() {
         <h2 className="text-xl font-bold text-foreground mb-2">העסקה כבר בוטלה</h2>
         <Link to={createPageUrl(`SaleDetails?id=${saleId}`)}>
           <Button>חזרה לפרטי העסקה</Button>
+        </Link>
+      </div>
+    );
+  }
+
+  // Check if user has permission to cancel this sale
+  if (!canCancelThisSale) {
+    return (
+      <div className="text-center py-16">
+        <h2 className="text-xl font-bold text-foreground mb-2">אין הרשאה</h2>
+        <p className="text-muted-foreground mb-4">אין לך הרשאה לבטל מכירה זו</p>
+        <Link to={createPageUrl("SalesHistory")}>
+          <Button>חזרה להיסטוריית מכירות</Button>
         </Link>
       </div>
     );
@@ -201,7 +237,7 @@ export default function CancelSale() {
             </Link>
             <Button 
               onClick={handleCancel}
-              disabled={cancelMutation.isPending}
+              disabled={cancelMutation.isPending || !canCancelThisSale}
               className="flex-1 bg-amber-600 hover:bg-amber-700"
             >
               {cancelMutation.isPending ? (

@@ -107,22 +107,41 @@ export default function SalesHistory() {
     enabled: !kioskLoading && (!!currentKiosk || user?.role === 'system_manager'),
   });
 
-  // Permission guard for assistants
-  if (user && user.role === 'assistant' && !hasPermission('sales_history_view')) {
+  // Check cancel permissions first
+  const canCancelOwn = user?.role !== 'assistant' || hasPermission('sales_cancel_own');
+  const canCancelAll = user?.role !== 'assistant' || hasPermission('sales_cancel_all');
+  
+  // Permission guard for assistants - allow access if they have cancel permissions or view permission
+  if (user && user.role === 'assistant' && !hasPermission('sales_history_view') && !canCancelOwn && !canCancelAll) {
     return (
       <div className="text-center py-12">
         <p className="text-muted-foreground">אין לך הרשאה לצפות בהיסטוריית המכירות</p>
       </div>
     );
   }
-
+  
   // Filter sales based on user role and filters
   const isOwner = user?.position === 'owner' || user?.role === 'admin';
   
+  // Determine what sales to show:
+  // - If assistant has sales_cancel_all: show ALL sales (regardless of view permission)
+  // - If assistant has only sales_cancel_own: show only their sales (even if they have view permission)
+  // - Otherwise: use standard role-based filtering
+  const hasViewPermission = user?.role !== 'assistant' || hasPermission('sales_history_view');
+  const shouldShowOnlyOwnSales = user?.role === 'assistant' && canCancelOwn && !canCancelAll;
+  const shouldShowAllSales = user?.role === 'assistant' && canCancelAll;
+  
   const filteredSales = sales.filter(sale => {
-    // Role-based filtering: sellers only see their own sales
-    // If user is admin/owner - show all, otherwise filter by seller
-    if (!isOwner && user?.id && sale.seller_id !== user?.id && sale.seller_id !== 'demo') {
+    // If assistant has cancel_all permission, show all sales (no seller filtering)
+    if (shouldShowAllSales) {
+      // Don't filter by seller - show all
+    }
+    // If assistant has only cancel_own permission (without view), show only their sales
+    else if (shouldShowOnlyOwnSales && user?.id && sale.seller_id !== user?.id) {
+      return false;
+    }
+    // Standard role-based filtering: sellers only see their own sales
+    else if (!isOwner && user?.id && sale.seller_id !== user?.id && sale.seller_id !== 'demo') {
       return false;
     }
 
@@ -381,12 +400,23 @@ export default function SalesHistory() {
                           >
                             <Eye className="h-4 w-4" />
                           </Button>
-                          {isOwner && sale.status === 'completed' && (
-                            <Link to={createPageUrl(`CancelSale?id=${sale.id}`)}>
-                              <Button variant="ghost" size="icon" title="ביטול עסקה" className="text-amber-600 hover:text-amber-700">
-                                <XCircle className="h-4 w-4" />
-                              </Button>
-                            </Link>
+                          {sale.status === 'completed' && (
+                            (() => {
+                              // Check if user can cancel this sale
+                              const canCancel = isOwner || 
+                                (canCancelAll) || 
+                                (canCancelOwn && sale.seller_id === user?.id);
+                              
+                              if (!canCancel) return null;
+                              
+                              return (
+                                <Link to={createPageUrl(`CancelSale?id=${sale.id}`)}>
+                                  <Button variant="ghost" size="icon" title="ביטול עסקה" className="text-amber-600 hover:text-amber-700">
+                                    <XCircle className="h-4 w-4" />
+                                  </Button>
+                                </Link>
+                              );
+                            })()
                           )}
                         </div>
                       </TableCell>

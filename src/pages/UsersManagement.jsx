@@ -68,12 +68,26 @@ const roleColors = {
 };
 
 const PERM_DEPENDENCIES = {
-  inventory_add: "inventory_view",
-  inventory_edit: "inventory_view",
-  inventory_delete: "inventory_view",
+  inventory_add: "inventory_view_counter", // Add requires view permission (can be either)
+  inventory_edit_counter: "inventory_view_counter",
+  inventory_edit_vault: "inventory_view_vault",
+  inventory_delete: "inventory_view_counter", // Delete requires view permission (can be either)
+  inventory_add_stock_counter: "inventory_view_counter", // Adding stock to counter requires view permission
+  inventory_add_stock_vault: "inventory_view_vault", // Adding stock to vault requires view permission
+  inventory_transfer_vault_to_counter: "inventory_view_vault", // Transfer requires view permission to vault
   sales_history_export: "sales_history_view",
+  sales_cancel_all: "sales_history_view", // Cancel all sales requires view permission
   reports_export: "reports_view",
 };
+
+// Build reverse dependency map: for each base permission, which permissions depend on it
+const PERM_DEPENDENTS = {};
+Object.entries(PERM_DEPENDENCIES).forEach(([dependent, base]) => {
+  if (!PERM_DEPENDENTS[base]) {
+    PERM_DEPENDENTS[base] = [];
+  }
+  PERM_DEPENDENTS[base].push(dependent);
+});
 
 const ensureBasePerms = (perms = []) => {
   const set = new Set(perms);
@@ -84,19 +98,35 @@ const ensureBasePerms = (perms = []) => {
   return Array.from(set);
 };
 
+// Remove dependent permissions when base permission is removed
+const removeDependentPerms = (perms = [], removedPerm = '') => {
+  const dependents = PERM_DEPENDENTS[removedPerm] || [];
+  return perms.filter((p) => !dependents.includes(p));
+};
+
 const ASSISTANT_PERMISSIONS = [
   // POS
   { key: "sell", label: "מכירה" },
   // Dashboard
   { key: "dashboard_view", label: "לוח בקרה - צפייה" },
-  // Inventory
-  { key: "inventory_view", label: "מלאי - צפייה" },
+  // Inventory - Counter
+  { key: "inventory_view_counter", label: "מלאי דלפק - צפייה" },
+  { key: "inventory_edit_counter", label: "מלאי דלפק - עריכת כרטיס" },
+  { key: "inventory_add_stock_counter", label: "מלאי דלפק - הוספת מלאי" },
+  // Inventory - Vault
+  { key: "inventory_view_vault", label: "מלאי כספת - צפייה" },
+  { key: "inventory_edit_vault", label: "מלאי כספת - עריכת כרטיס" },
+  { key: "inventory_add_stock_vault", label: "מלאי כספת - הוספת מלאי" },
+  // Inventory - Transfer
+  { key: "inventory_transfer_vault_to_counter", label: "העברת מלאי מכספת לדלפק" },
+  // Inventory - General (not location-specific)
   { key: "inventory_add", label: "מלאי - הוספת כרטיס" },
-  { key: "inventory_edit", label: "מלאי - עריכת כרטיס" },
   { key: "inventory_delete", label: "מלאי - מחיקת כרטיס" },
   // Sales history
   { key: "sales_history_view", label: "היסטוריית מכירות - צפייה" },
   { key: "sales_history_export", label: "היסטוריית מכירות - ייצוא CSV" },
+  { key: "sales_cancel_own", label: "ביטול מכירות - מכירות אישיות" },
+  { key: "sales_cancel_all", label: "ביטול מכירות - כל המכירות" },
   // Reports
   { key: "reports_view", label: "דוחות - צפייה" },
   { key: "reports_export", label: "דוחות - ייצוא" },
@@ -669,9 +699,13 @@ export default function UsersManagement() {
                               setFormData((prev) => {
                                 const currentPerms = prev.permissions || [];
                                 if (checked) {
+                                  // When checking: ensure base permissions are added
                                   return { ...prev, permissions: ensureBasePerms([...currentPerms, perm.key]) };
+                                } else {
+                                  // When unchecking: remove this permission and all dependent permissions
+                                  const withoutThis = currentPerms.filter((p) => p !== perm.key);
+                                  return { ...prev, permissions: removeDependentPerms(withoutThis, perm.key) };
                                 }
-                                return { ...prev, permissions: currentPerms.filter((p) => p !== perm.key) };
                               });
                             }}
                           />
