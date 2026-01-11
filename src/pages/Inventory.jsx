@@ -782,7 +782,7 @@ export default function Inventory() {
       )}
 
       {/* Tickets Grid */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
         <AnimatePresence>
           {sortedTickets.map((ticket, index) => {
             const quantityCounter = ticket.quantity_counter ?? 0;
@@ -1059,26 +1059,6 @@ export default function Inventory() {
                 placeholder="למשל: מטוסים (לכרטיס אואזיס)"
               />
               <p className="text-xs text-slate-500">כינוי שיופיע ליד השם המקורי</p>
-            </div>
-
-            <div className="space-y-2">
-              <Label>סוג כרטיס</Label>
-              <Select
-                value={formData.ticket_category}
-                onValueChange={(value) => setFormData({ ...formData, ticket_category: value })}
-                disabled={!!selectedTicket && selectedTicket.ticket_category === 'pais'}
-              >
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="custom">מותאם אישית</SelectItem>
-                  <SelectItem value="pais">מפעל הפיס</SelectItem>
-                </SelectContent>
-              </Select>
-              {selectedTicket && selectedTicket.ticket_category === 'pais' && (
-                <p className="text-xs text-slate-500">לא ניתן לשנות סוג כרטיס של מפעל הפיס</p>
-              )}
             </div>
 
             <div className="grid grid-cols-2 gap-4">

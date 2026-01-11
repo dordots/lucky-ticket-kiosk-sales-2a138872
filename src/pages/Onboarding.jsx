@@ -352,7 +352,7 @@ export default function Onboarding() {
                     </p>
                   </div>
 
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-8">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mt-8">
                     <div className="text-center p-4 rounded-lg bg-indigo-50 dark:bg-indigo-900/20">
                       <Package className="h-8 w-8 mx-auto mb-2 text-indigo-600" />
                       <h3 className="font-semibold mb-1">הגדרת מלאי</h3>
@@ -452,7 +452,7 @@ export default function Onboarding() {
                                 <p className="text-sm text-muted-foreground mb-3">
                                   מחיר: ₪{ticket.price}
                                 </p>
-                                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
                                   <div className="space-y-1">
                                     <Label className="text-xs">
                                       {ticket.default_quantity_per_package ? "מספר חבילות בדלפק" : "כמות בדלפק"}
