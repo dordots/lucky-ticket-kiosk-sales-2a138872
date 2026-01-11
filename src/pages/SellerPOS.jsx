@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo } from "react";
+import { useNavigate } from "react-router-dom";
 import { auth, Sale, TicketType, Notification, AuditLog } from "@/api/entities";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useKiosk } from "@/contexts/KioskContext";
@@ -28,7 +29,9 @@ export default function SellerPOS() {
   const [paymentOpen, setPaymentOpen] = useState(false);
   const [selectedTicket, setSelectedTicket] = useState(null);
   const [isProcessing, setIsProcessing] = useState(false);
+  const [saleCompleted, setSaleCompleted] = useState(false);
   const { currentKiosk, isLoading: kioskLoading } = useKiosk();
+  const navigate = useNavigate();
   
   const queryClient = useQueryClient();
 
@@ -283,6 +286,8 @@ export default function SellerPOS() {
       queryClient.invalidateQueries({ queryKey: ['notifications-all'] });
       
       setIsProcessing(false);
+      setSaleCompleted(true); // Mark that sale was completed
+      
       return true;
     } catch (error) {
       console.error("Error creating sale:", error);
@@ -470,7 +475,11 @@ export default function SellerPOS() {
       {/* Payment Dialog */}
       <PaymentDialog
         open={paymentOpen}
-        onClose={() => setPaymentOpen(false)}
+        onClose={() => {
+          setPaymentOpen(false);
+          setSaleCompleted(false);
+          // Stay on the sales screen after successful sale
+        }}
         onConfirm={handleConfirmSale}
         total={calculateTotal}
         itemsCount={getItemsCount}

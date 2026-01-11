@@ -45,8 +45,16 @@ export default function PaymentDialog({
   };
 
   const handleDialogClose = (isOpen) => {
-    // Prevent closing when showing success message
+    // When showing success, allow closing by clicking outside or X button
     if (showSuccess && !isOpen) {
+      setShowSuccess(false);
+      setNotes("");
+      setSelectedMethod("cash");
+      onClose();
+      return;
+    }
+    // Prevent closing during processing
+    if (isProcessing) {
       return;
     }
     if (!isOpen) {
@@ -64,9 +72,35 @@ export default function PaymentDialog({
     }
   }, [open]);
 
+  const handleOverlayClick = (e) => {
+    // Only close if clicking directly on overlay, not on content
+    if (e.target === e.currentTarget && !showSuccess) {
+      onClose();
+    }
+  };
+
   return (
     <Dialog open={open} onOpenChange={handleDialogClose}>
-      <DialogContent className="sm:max-w-md" dir="rtl">
+      <DialogContent 
+        className="sm:max-w-md" 
+        dir="rtl"
+        onPointerDownOutside={(e) => {
+          // Allow closing by clicking outside (on overlay) - both in form and success states
+          // But prevent closing during processing
+          if (isProcessing) {
+            e.preventDefault();
+            return;
+          }
+          
+          // If showing success, reset state and close
+          if (showSuccess) {
+            setShowSuccess(false);
+            setNotes("");
+            setSelectedMethod("cash");
+          }
+          onClose();
+        }}
+      >
         <AnimatePresence mode="wait">
           {showSuccess ? (
             <motion.div
@@ -99,6 +133,7 @@ export default function PaymentDialog({
               </motion.div>
               <h3 className="text-xl font-bold text-foreground mb-2">העסקה הושלמה!</h3>
               <p className="text-muted-foreground mb-4">סכום: ₪{savedTotal.toFixed(2)}</p>
+              <p className="text-sm text-muted-foreground mb-4">נגע במסך כדי לסגור</p>
               <Button
                 onClick={() => {
                   setShowSuccess(false);
