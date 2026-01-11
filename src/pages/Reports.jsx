@@ -577,7 +577,17 @@ export default function Reports() {
             {tickets
               .filter(t => {
                 const quantityCounter = t.quantity_counter ?? 0;
-                return quantityCounter <= (t.min_threshold || 10) && t.is_active;
+                const quantityVault = t.quantity_vault ?? 0;
+                const totalQuantity = quantityCounter + quantityVault;
+                const threshold = t.min_threshold || 10;
+                
+                // Only show tickets that:
+                // 1. Are active
+                // 2. Have been entered into inventory (totalQuantity > 0)
+                // 3. Have stock on counter that is low or out (quantityCounter <= threshold)
+                return t.is_active && 
+                       totalQuantity > 0 && 
+                       quantityCounter <= threshold;
               })
               .map(ticket => {
                 const quantityCounter = ticket.quantity_counter ?? 0;
@@ -622,7 +632,14 @@ export default function Reports() {
               })}
             {tickets.filter(t => {
               const quantityCounter = t.quantity_counter ?? 0;
-              return quantityCounter <= (t.min_threshold || 10) && t.is_active;
+              const quantityVault = t.quantity_vault ?? 0;
+              const totalQuantity = quantityCounter + quantityVault;
+              const threshold = t.min_threshold || 10;
+              
+              // Only count tickets that have been entered into inventory
+              return t.is_active && 
+                     totalQuantity > 0 && 
+                     quantityCounter <= threshold;
             }).length === 0 && (
               <p className="text-muted-foreground col-span-full text-center py-8">
                 כל הפריטים במלאי תקין

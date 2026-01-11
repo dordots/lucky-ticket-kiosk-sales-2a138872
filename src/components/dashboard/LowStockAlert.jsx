@@ -12,7 +12,21 @@ export default function LowStockAlert({ tickets }) {
   const [currentPage, setCurrentPage] = useState(0);
   const lowStockTickets = tickets.filter(t => {
     const quantityCounter = t.quantity_counter ?? 0;
-    return quantityCounter <= (t.min_threshold || 10) && t.is_active;
+    const quantityVault = t.quantity_vault ?? 0;
+    const totalQuantity = quantityCounter + quantityVault;
+    const threshold = t.min_threshold || 10;
+    
+    // Only show tickets that:
+    // 1. Are active
+    // 2. Have been entered into inventory (totalQuantity > 0 means it was entered at some point)
+    // 3. Have stock on counter that is low (quantityCounter > 0 && quantityCounter <= threshold)
+    // Don't show tickets that:
+    // - Are completely out of stock (quantityCounter === 0)
+    // - Were never entered into inventory (totalQuantity === 0)
+    return t.is_active && 
+           totalQuantity > 0 && 
+           quantityCounter > 0 && 
+           quantityCounter <= threshold;
   });
 
   if (lowStockTickets.length === 0) {

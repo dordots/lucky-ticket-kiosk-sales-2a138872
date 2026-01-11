@@ -81,8 +81,8 @@ export default function Dashboard() {
   });
 
   // Calculate stats with useMemo for performance
+  const today = new Date(); // Define today outside useMemo for use in JSX
   const stats = useMemo(() => {
-    const today = new Date();
     const todayStart = startOfDay(today);
     const todayEnd = endOfDay(today);
     const monthStart = startOfMonth(today);
@@ -103,7 +103,21 @@ export default function Dashboard() {
       sum + (sale.items?.reduce((s, item) => s + item.quantity, 0) || 0), 0
     );
 
-    const lowStockCount = tickets.filter(t => t.quantity <= t.min_threshold && t.is_active).length;
+    const lowStockCount = tickets.filter(t => {
+      const quantityCounter = t.quantity_counter ?? 0;
+      const quantityVault = t.quantity_vault ?? 0;
+      const totalQuantity = quantityCounter + quantityVault;
+      const threshold = t.min_threshold || 10;
+      
+      // Only count tickets that:
+      // 1. Are active
+      // 2. Have been entered into inventory (totalQuantity > 0)
+      // 3. Have stock on counter that is low (quantityCounter > 0 && quantityCounter <= threshold)
+      return t.is_active && 
+             totalQuantity > 0 && 
+             quantityCounter > 0 && 
+             quantityCounter <= threshold;
+    }).length;
     const activeUsers = users.filter(u => u.is_active !== false).length;
 
     return {
