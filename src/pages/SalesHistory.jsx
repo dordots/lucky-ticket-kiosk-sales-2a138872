@@ -16,7 +16,8 @@ import {
   CreditCard,
   Banknote,
   Wallet,
-  FileText
+  FileText,
+  XCircle
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -371,13 +372,23 @@ export default function SalesHistory() {
                         )}
                       </TableCell>
                       <TableCell>
-                        <Button 
-                          variant="ghost" 
-                          size="icon"
-                          onClick={() => setSelectedSale(sale)}
-                        >
-                          <Eye className="h-4 w-4" />
-                        </Button>
+                        <div className="flex items-center gap-1">
+                          <Button 
+                            variant="ghost" 
+                            size="icon"
+                            onClick={() => setSelectedSale(sale)}
+                            title="צפייה"
+                          >
+                            <Eye className="h-4 w-4" />
+                          </Button>
+                          {isOwner && sale.status === 'completed' && (
+                            <Link to={createPageUrl(`CancelSale?id=${sale.id}`)}>
+                              <Button variant="ghost" size="icon" title="ביטול עסקה" className="text-amber-600 hover:text-amber-700">
+                                <XCircle className="h-4 w-4" />
+                              </Button>
+                            </Link>
+                          )}
+                        </div>
                       </TableCell>
                     </TableRow>
                   );

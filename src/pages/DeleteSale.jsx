@@ -41,8 +41,7 @@ export default function DeleteSale() {
     queryKey: ['sale-delete', saleId],
     queryFn: async () => {
       if (!saleId) return null;
-      const sales = await Sale.filter({ id: saleId });
-      return sales[0] || null;
+      return await Sale.get(saleId);
     },
     enabled: !!saleId,
   });

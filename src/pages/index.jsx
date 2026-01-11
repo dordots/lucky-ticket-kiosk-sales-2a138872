@@ -13,6 +13,7 @@ const Notifications = lazy(() => import("./Notifications"));
 const SaleDetails = lazy(() => import("./SaleDetails"));
 const EditSale = lazy(() => import("./EditSale"));
 const DeleteSale = lazy(() => import("./DeleteSale"));
+const CancelSale = lazy(() => import("./CancelSale"));
 const AuditLog = lazy(() => import("./AuditLog"));
 const Settings = lazy(() => import("./Settings"));
 const KiosksManagement = lazy(() => import("./KiosksManagement"));
@@ -42,6 +43,7 @@ const PAGES = {
     SaleDetails: SaleDetails,
     EditSale: EditSale,
     DeleteSale: DeleteSale,
+    CancelSale: CancelSale,
     AuditLog: AuditLog,
     Settings: Settings,
     KiosksManagement: KiosksManagement,
@@ -97,6 +99,8 @@ function PagesContent() {
                     <Route path="/EditSale" element={<EditSale />} />
                     
                     <Route path="/DeleteSale" element={<DeleteSale />} />
+                    
+                    <Route path="/CancelSale" element={<CancelSale />} />
                     
                     <Route path="/AuditLog" element={<AuditLog />} />
                     

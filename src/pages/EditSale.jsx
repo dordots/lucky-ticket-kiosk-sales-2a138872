@@ -53,8 +53,7 @@ export default function EditSale() {
     queryKey: ['sale-edit', saleId],
     queryFn: async () => {
       if (!saleId) return null;
-      const sales = await Sale.filter({ id: saleId });
-      return sales[0] || null;
+      return await Sale.get(saleId);
     },
     enabled: !!saleId,
   });

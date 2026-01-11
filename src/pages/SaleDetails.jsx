@@ -15,6 +15,7 @@ import {
   FileText,
   Edit,
   Trash2,
+  XCircle,
   History
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -62,8 +63,7 @@ export default function SaleDetails() {
     queryKey: ['sale', saleId],
     queryFn: async () => {
       if (!saleId) return null;
-      const sales = await Sale.filter({ id: saleId });
-      return sales[0] || null;
+      return await Sale.get(saleId);
     },
     enabled: !!saleId,
   });
@@ -119,6 +119,12 @@ export default function SaleDetails() {
               <Button variant="outline">
                 <Edit className="h-4 w-4 ml-2" />
                 עריכה
+              </Button>
+            </Link>
+            <Link to={createPageUrl(`CancelSale?id=${sale.id}`)}>
+              <Button variant="outline" className="text-amber-600 border-amber-200 hover:bg-amber-50">
+                <XCircle className="h-4 w-4 ml-2" />
+                ביטול
               </Button>
             </Link>
             <Link to={createPageUrl(`DeleteSale?id=${sale.id}`)}>
