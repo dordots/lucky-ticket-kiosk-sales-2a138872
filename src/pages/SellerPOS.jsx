@@ -427,7 +427,7 @@ export default function SellerPOS() {
               </div>
             </div>
           ) : isLoading ? (
-            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
               {[...Array(10)].map((_, i) => (
                 <div key={i} className="bg-card rounded-2xl p-4 animate-pulse">
                   <div className="h-20 bg-accent rounded-xl mb-3" />

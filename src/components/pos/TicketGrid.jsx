@@ -16,7 +16,7 @@ const colorMap = {
 
 function TicketGrid({ tickets, onSelect, selectedItems }) {
   return (
-    <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
+    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
       {tickets.map((ticket, index) => {
         const quantityCounter = ticket.quantity_counter ?? 0;
         const isLowStock = quantityCounter <= (ticket.min_threshold || 10);
