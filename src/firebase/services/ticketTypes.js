@@ -231,14 +231,16 @@ export const updateTicketType = async (ticketTypeId, updateData, kioskId = null)
   try {
     const ticketTypeRef = doc(db, COLLECTION_NAME, ticketTypeId);
     
-    // Get current ticket data
-    const current = await getTicketTypeById(ticketTypeId);
-    if (!current) {
+    // Get current ticket data directly from Firestore (raw data) to ensure we have the latest amount map
+    const ticketTypeSnap = await getDoc(ticketTypeRef);
+    if (!ticketTypeSnap.exists()) {
       throw new Error('Ticket type not found');
     }
     
-    // Get current amount map
-    const amount = current.amount || {};
+    const ticketData = ticketTypeSnap.data();
+    
+    // Get current amount map from raw data
+    const amount = ticketData.amount || {};
     
     // Extract kiosk-specific updates
     const { quantity_counter, quantity_vault, ...globalUpdates } = updateData;

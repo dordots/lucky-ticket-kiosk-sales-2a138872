@@ -127,8 +127,9 @@ export default function Inventory() {
   const [packagesFormData, setPackagesFormData] = useState({
     ticketId: "",
     ticketName: "",
-    packages: "",
-    destination: "counter", // "counter" or "vault"
+    units: "", // For direct unit input
+    packages: "", // For package input (mutually exclusive with units)
+    destination: "counter", // "counter" or "vault" - set based on activeTab
     defaultQuantityPerPackage: null,
   });
   const [sortBy, setSortBy] = useState("name"); // name, price, quantity_counter, quantity_vault, total_quantity, demand
@@ -1125,8 +1126,9 @@ export default function Inventory() {
                               setPackagesFormData({
                                 ticketId: ticket.id,
                                 ticketName: ticket.name,
+                                units: "",
                                 packages: "",
-                                destination: "counter",
+                                destination: activeTab, // Set based on active tab
                                 defaultQuantityPerPackage: ticket.default_quantity_per_package || null,
                               });
                               setPackagesDialogOpen(true);
@@ -1322,6 +1324,26 @@ export default function Inventory() {
                         {/* Actions */}
                         <div className="flex items-center justify-between gap-2 mt-3">
                           <div className="flex gap-1">
+                            <Button 
+                              variant="ghost" 
+                              size="icon" 
+                              onClick={() => {
+                                setPackagesFormData({
+                                  ticketId: ticket.id,
+                                  ticketName: ticket.name,
+                                  units: "",
+                                  packages: "",
+                                  destination: activeTab, // Set based on active tab
+                                  defaultQuantityPerPackage: ticket.default_quantity_per_package || null,
+                                });
+                                setPackagesDialogOpen(true);
+                              }}
+                              disabled={user?.role === 'assistant' && !(activeTab === 'counter' ? canAddStockCounter : canAddStockVault)}
+                              title={ticket.default_quantity_per_package ? "עדכן מלאי לפי חבילות" : "עדכן מלאי"}
+                              className={ticket.default_quantity_per_package ? "text-green-600" : ""}
+                            >
+                              <Plus className="h-4 w-4" />
+                            </Button>
                             {quantityVault > 0 && (
                               <Button 
                                 variant="ghost" 
@@ -1335,9 +1357,6 @@ export default function Inventory() {
                               >
                                 <Package className="h-4 w-4 text-blue-500" />
                               </Button>
-                            )}
-                            {quantityVault === 0 && (
-                              <div className="w-10 h-10"></div>
                             )}
                           </div>
                           <div className="flex gap-1">
@@ -2039,7 +2058,7 @@ export default function Inventory() {
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle>
-              {packagesFormData.defaultQuantityPerPackage ? "עדכן מלאי לפי חבילות" : "עדכן מלאי"}
+              הוספת מלאי ל{packagesFormData.destination === "counter" ? "דלפק" : "כספת"}
             </DialogTitle>
           </DialogHeader>
           <div className="space-y-4">
@@ -2056,53 +2075,55 @@ export default function Inventory() {
                 </div>
                 
                 <div className="space-y-2">
-                  <Label>
-                    {packagesFormData.defaultQuantityPerPackage ? "מספר חבילות" : "מספר יחידות"}
-                  </Label>
+                  <Label>מספר יחידות</Label>
                   <Input
                     type="number"
-                    value={packagesFormData.packages}
+                    value={packagesFormData.units}
                     onChange={(e) => {
                       const val = e.target.value;
-                      if (val === "" || (parseInt(val) > 0)) {
-                        setPackagesFormData({ ...packagesFormData, packages: val });
+                      const numVal = parseInt(val) || 0;
+                      if (val === "" || numVal >= 0) {
+                        setPackagesFormData({ 
+                          ...packagesFormData, 
+                          units: val,
+                          packages: numVal > 0 ? "" : packagesFormData.packages // Clear packages only if units > 0
+                        });
                       }
                     }}
                     placeholder="0"
-                    min="1"
+                    min="0"
+                    disabled={!!packagesFormData.packages && parseInt(packagesFormData.packages) > 0}
                   />
-                  {packagesFormData.packages && packagesFormData.defaultQuantityPerPackage && (
-                    <p className="text-sm text-muted-foreground">
-                      סה"כ כרטיסים: <strong>{parseInt(packagesFormData.packages || 0) * packagesFormData.defaultQuantityPerPackage}</strong>
-                    </p>
-                  )}
                 </div>
                 
-                <div className="space-y-2">
-                  <Label>יעד</Label>
-                  <Select
-                    value={packagesFormData.destination}
-                    onValueChange={(value) => setPackagesFormData({ ...packagesFormData, destination: value })}
-                  >
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem 
-                        value="counter" 
-                        disabled={user?.role === 'assistant' && !canAddStockCounter}
-                      >
-                        דלפק
-                      </SelectItem>
-                      <SelectItem 
-                        value="vault" 
-                        disabled={user?.role === 'assistant' && !canAddStockVault}
-                      >
-                        כספת
-                      </SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
+                {packagesFormData.defaultQuantityPerPackage && (
+                  <div className="space-y-2">
+                    <Label>מספר חבילות</Label>
+                    <Input
+                      type="number"
+                      value={packagesFormData.packages}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        const numVal = parseInt(val) || 0;
+                        if (val === "" || numVal >= 0) {
+                          setPackagesFormData({ 
+                            ...packagesFormData, 
+                            packages: val,
+                            units: numVal > 0 ? "" : packagesFormData.units // Clear units only if packages > 0
+                          });
+                        }
+                      }}
+                      placeholder="0"
+                      min="0"
+                      disabled={!!packagesFormData.units && parseInt(packagesFormData.units) > 0}
+                    />
+                    {packagesFormData.packages && (
+                      <p className="text-sm text-muted-foreground">
+                        סה"כ כרטיסים: <strong>{parseInt(packagesFormData.packages || 0) * packagesFormData.defaultQuantityPerPackage}</strong>
+                      </p>
+                    )}
+                  </div>
+                )}
                 
                 {packagesFormData.destination === "counter" && (
                   <div className="p-4 bg-amber-50 dark:bg-amber-900/30 border-2 border-amber-300 dark:border-amber-700 rounded-lg">
@@ -2121,11 +2142,13 @@ export default function Inventory() {
                 <Select
                   value={packagesFormData.ticketId}
                   onValueChange={(value) => {
-                    const selectedTicket = tickets.find(t => t.id === value);
+                    const selectedTicket = allAvailableTickets.find(t => t.id === value);
                     setPackagesFormData({
                       ...packagesFormData,
                       ticketId: value,
                       ticketName: selectedTicket?.name || "",
+                      units: "",
+                      packages: "",
                       defaultQuantityPerPackage: selectedTicket?.default_quantity_per_package || null,
                     });
                   }}
@@ -2134,7 +2157,7 @@ export default function Inventory() {
                     <SelectValue placeholder="בחר כרטיס" />
                   </SelectTrigger>
                   <SelectContent>
-                    {tickets.map(ticket => (
+                    {allAvailableTickets.map(ticket => (
                       <SelectItem key={ticket.id} value={ticket.id}>
                         {ticket.name}
                         {ticket.default_quantity_per_package && ` (${ticket.default_quantity_per_package} כרטיסים בחבילה)`}
@@ -2151,6 +2174,7 @@ export default function Inventory() {
               setPackagesFormData({
                 ticketId: "",
                 ticketName: "",
+                units: "",
                 packages: "",
                 destination: "counter",
                 defaultQuantityPerPackage: null,
@@ -2160,21 +2184,39 @@ export default function Inventory() {
             </Button>
             <Button
               onClick={async () => {
-                if (!packagesFormData.ticketId || !packagesFormData.packages) {
-                  alert('אנא בחר כרטיס והזן מספר חבילות');
+                if (!packagesFormData.ticketId) {
+                  alert('אנא בחר כרטיס');
                   return;
                 }
                 
-                const inputValue = parseInt(packagesFormData.packages);
-                if (inputValue <= 0) {
-                  alert('הערך חייב להיות גדול מ-0');
+                // Check if either units or packages is provided (mutually exclusive)
+                const unitsValue = parseInt(packagesFormData.units) || 0;
+                const packagesValue = parseInt(packagesFormData.packages) || 0;
+                
+                if (unitsValue === 0 && packagesValue === 0) {
+                  alert('אנא הזן מספר יחידות או מספר חבילות');
                   return;
                 }
                 
-                // Calculate quantity: if defaultQuantityPerPackage exists, multiply by it, otherwise use input directly
-                const quantity = packagesFormData.defaultQuantityPerPackage 
-                  ? inputValue * packagesFormData.defaultQuantityPerPackage 
-                  : inputValue;
+                if (unitsValue > 0 && packagesValue > 0) {
+                  alert('אפשר להזין רק יחידות או חבילות, לא את שניהם');
+                  return;
+                }
+                
+                // Calculate quantity
+                let quantity = 0;
+                let isPackages = false;
+                if (unitsValue > 0) {
+                  quantity = unitsValue;
+                  isPackages = false;
+                } else if (packagesValue > 0) {
+                  if (!packagesFormData.defaultQuantityPerPackage) {
+                    alert('לכרטיס זה לא מוגדרת כמות בחבילה');
+                    return;
+                  }
+                  quantity = packagesValue * packagesFormData.defaultQuantityPerPackage;
+                  isPackages = true;
+                }
                 
                 // Check permission based on destination
                 if (user?.role === 'assistant') {
@@ -2191,14 +2233,35 @@ export default function Inventory() {
                     return;
                   }
                   
-                  const selectedTicket = tickets.find(t => t.id === packagesFormData.ticketId);
+                  const selectedTicket = allAvailableTickets.find(t => t.id === packagesFormData.ticketId) || tickets.find(t => t.id === packagesFormData.ticketId);
                   if (!selectedTicket) {
                     alert('כרטיס לא נמצא');
                     return;
                   }
                   
-                  const currentCounter = selectedTicket.quantity_counter ?? 0;
-                  const currentVault = selectedTicket.quantity_vault ?? 0;
+                  // Get current quantities from the ticket in the inventory list (if it exists)
+                  // Otherwise, get it directly from the database to ensure we have the latest values
+                  let currentCounter = 0;
+                  let currentVault = 0;
+                  
+                  const ticketInInventory = tickets.find(t => t.id === packagesFormData.ticketId);
+                  if (ticketInInventory) {
+                    // Use values from inventory list (already normalized for this kiosk)
+                    currentCounter = ticketInInventory.quantity_counter ?? 0;
+                    currentVault = ticketInInventory.quantity_vault ?? 0;
+                  } else {
+                    // Ticket not in inventory yet, get it from database to check if it has any amounts for this kiosk
+                    try {
+                      const ticketFromDb = await ticketTypesService.getTicketTypeById(packagesFormData.ticketId, currentKiosk.id);
+                      if (ticketFromDb) {
+                        currentCounter = ticketFromDb.quantity_counter ?? 0;
+                        currentVault = ticketFromDb.quantity_vault ?? 0;
+                      }
+                    } catch (error) {
+                      console.error('Error getting ticket from database:', error);
+                      // Default to 0 if error
+                    }
+                  }
                   
                   const updateData = {};
                   if (packagesFormData.destination === "counter") {
@@ -2225,14 +2288,15 @@ export default function Inventory() {
                       quantity: quantity,
                       destination: packagesFormData.destination,
                       destination_name: packagesFormData.destination === "counter" ? "דלפק" : "כספת",
-                      packages: packagesFormData.defaultQuantityPerPackage ? inputValue : null,
+                      units: isPackages ? null : unitsValue,
+                      packages: isPackages ? packagesValue : null,
                       quantity_per_package: packagesFormData.defaultQuantityPerPackage || null,
                       quantity_before_counter: currentCounter,
                       quantity_after_counter: packagesFormData.destination === "counter" ? currentCounter + quantity : currentCounter,
                       quantity_before_vault: currentVault,
                       quantity_after_vault: packagesFormData.destination === "vault" ? currentVault + quantity : currentVault,
-                      message: packagesFormData.defaultQuantityPerPackage
-                        ? `הוספו ${inputValue} חבילות (${quantity} כרטיסים) ל${packagesFormData.destination === "counter" ? "דלפק" : "כספת"}`
+                      message: isPackages
+                        ? `הוספו ${packagesValue} חבילות (${quantity} כרטיסים) ל${packagesFormData.destination === "counter" ? "דלפק" : "כספת"}`
                         : `הוספו ${quantity} כרטיסים ל${packagesFormData.destination === "counter" ? "דלפק" : "כספת"}`
                     },
                     user_id: user?.id,
@@ -2247,6 +2311,7 @@ export default function Inventory() {
                   setPackagesFormData({
                     ticketId: "",
                     ticketName: "",
+                    units: "",
                     packages: "",
                     destination: "counter",
                     defaultQuantityPerPackage: null,
@@ -2256,7 +2321,11 @@ export default function Inventory() {
                   alert('שגיאה בהוספת החבילות: ' + (error.message || 'שגיאה לא ידועה'));
                 }
               }}
-              disabled={!packagesFormData.ticketId || !packagesFormData.packages || parseInt(packagesFormData.packages) <= 0}
+              disabled={
+                !packagesFormData.ticketId || 
+                ((!packagesFormData.units || parseInt(packagesFormData.units) <= 0) && 
+                 (!packagesFormData.packages || parseInt(packagesFormData.packages) <= 0))
+              }
               className="bg-theme-gradient"
             >
               הוסף
