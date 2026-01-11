@@ -51,6 +51,19 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import {
+  Popover,
+  PopoverContent,
+  PopoverAnchor,
+} from "@/components/ui/popover";
+import {
+  Command,
+  CommandInput,
+  CommandList,
+  CommandEmpty,
+  CommandGroup,
+  CommandItem,
+} from "@/components/ui/command";
 // Toast removed
 
 const colorOptions = [
@@ -73,6 +86,8 @@ export default function Inventory() {
     return Array.isArray(user.permissions) ? user.permissions.includes(perm) : false;
   };
   const [searchTerm, setSearchTerm] = useState("");
+  const [addTicketSearch, setAddTicketSearch] = useState("");
+  const [addTicketOpen, setAddTicketOpen] = useState(false);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [selectedTicket, setSelectedTicket] = useState(null);
@@ -82,8 +97,12 @@ export default function Inventory() {
     nickname: "",
     price: "",
     code: "",
-    quantity_counter: "",
-    quantity_vault: "",
+    // Counter fields (mutually exclusive)
+    counter_units: "",
+    counter_packages: "",
+    // Vault fields (mutually exclusive)
+    vault_units: "",
+    vault_packages: "",
     is_opened: false,
     default_quantity_per_package: "",
     min_threshold: "10",
@@ -159,6 +178,25 @@ export default function Inventory() {
     staleTime: 2 * 60 * 1000, // 2 minutes
   });
 
+  // Load all available tickets (including Pais) for the add ticket search
+  const { data: allAvailableTickets = [] } = useQuery({
+    queryKey: ['tickets-all-available', currentKiosk?.id],
+    queryFn: async () => {
+      if (!currentKiosk?.id) return [];
+      try {
+        // Get all ticket types (including those without inventory for this kiosk)
+        const result = await ticketTypesService.getAllTicketTypes();
+        // Filter only active tickets
+        return result.filter(ticket => ticket.is_active === true);
+      } catch (error) {
+        console.error('Inventory: Error loading all tickets:', error);
+        return [];
+      }
+    },
+    enabled: !kioskLoading && !!currentKiosk?.id,
+    staleTime: 5 * 60 * 1000, // 5 minutes
+  });
+
   const createMutation = useMutation({
     mutationFn: (data) => {
       // Add kiosk_id to data for initial amount
@@ -210,8 +248,10 @@ export default function Inventory() {
       nickname: "",
       price: "",
       code: "", // Will be generated automatically
-      quantity_counter: "",
-      quantity_vault: "",
+      counter_units: "",
+      counter_packages: "",
+      vault_units: "",
+      vault_packages: "",
       is_opened: false,
       default_quantity_per_package: "",
       min_threshold: "10",
@@ -232,8 +272,10 @@ export default function Inventory() {
       nickname: ticket.nickname || "",
       price: ticket.price?.toString() || "",
       code: ticket.code || "", // Keep existing code (readonly)
-      quantity_counter: ticket.quantity_counter?.toString() || "0",
-      quantity_vault: ticket.quantity_vault?.toString() || "0",
+      counter_units: ticket.quantity_counter?.toString() || "0",
+      counter_packages: "",
+      vault_units: ticket.quantity_vault?.toString() || "0",
+      vault_packages: "",
       is_opened: ticket.is_opened ?? false,
       default_quantity_per_package: ticket.default_quantity_per_package?.toString() || "",
       min_threshold: ticket.min_threshold?.toString() || "10",
@@ -261,6 +303,75 @@ export default function Inventory() {
         return;
       }
     }
+
+    if (!currentKiosk?.id) {
+      alert('לא ניתן ליצור כרטיס ללא קיוסק נבחר');
+      return;
+    }
+
+    // Check if selectedTicket exists in the inventory list (has inventory for this kiosk)
+    const ticketInInventory = tickets.find(t => t.id === selectedTicket?.id);
+    
+    // If ticket exists in system but not in inventory, just add inventory
+    if (selectedTicket && !ticketInInventory) {
+      // Adding existing ticket to inventory - only update quantities
+      // Calculate quantities from units or packages
+      const defaultQtyPerPackage = selectedTicket.default_quantity_per_package || 1;
+      
+      // Counter: units or packages (mutually exclusive)
+      let quantity_counter = 0;
+      if (formData.counter_units) {
+        quantity_counter = parseInt(formData.counter_units) || 0;
+      } else if (formData.counter_packages) {
+        quantity_counter = (parseInt(formData.counter_packages) || 0) * defaultQtyPerPackage;
+      }
+      
+      // Vault: units or packages (mutually exclusive)
+      let quantity_vault = 0;
+      if (formData.vault_units) {
+        quantity_vault = parseInt(formData.vault_units) || 0;
+      } else if (formData.vault_packages) {
+        quantity_vault = (parseInt(formData.vault_packages) || 0) * defaultQtyPerPackage;
+      }
+      
+      if (quantity_counter === 0 && quantity_vault === 0) {
+        alert('נא להזין כמות בדלפק או בכספת');
+        return;
+      }
+
+      await TicketType.update(selectedTicket.id, {
+        quantity_counter,
+        quantity_vault,
+        is_opened: formData.is_opened,
+      }, currentKiosk.id);
+
+      // Create audit log
+      try {
+        await AuditLog.create({
+          action: "add_inventory",
+          actor_id: user?.id,
+          actor_name: user?.full_name || user?.email,
+          target_id: selectedTicket.id,
+          target_type: "TicketType",
+          details: { 
+            ticket_name: selectedTicket.name,
+            quantity_counter,
+            quantity_vault,
+            is_opened: formData.is_opened
+          },
+          kiosk_id: currentKiosk.id,
+        });
+      } catch (auditError) {
+        console.error("Error creating audit log:", auditError);
+      }
+
+      queryClient.invalidateQueries({ queryKey: ['tickets-inventory'] });
+      queryClient.invalidateQueries({ queryKey: ['tickets-all-available'] });
+      setDialogOpen(false);
+      resetForm();
+      return;
+    }
+
     // Generate code automatically for new tickets
     let code = formData.code;
     if (!selectedTicket) {
@@ -277,18 +388,29 @@ export default function Inventory() {
       code = selectedTicket.code || formData.code;
     }
 
-    if (!currentKiosk?.id) {
-      alert('לא ניתן ליצור כרטיס ללא קיוסק נבחר');
-      return;
-    }
-
     const data = {
       name: formData.name,
       nickname: formData.nickname || null, // Store null if empty
       price: parseFloat(formData.price),
       code: code,
-      quantity_counter: parseInt(formData.quantity_counter) || 0,
-      quantity_vault: parseInt(formData.quantity_vault) || 0,
+      quantity_counter: (() => {
+        if (formData.counter_units) return parseInt(formData.counter_units) || 0;
+        if (formData.counter_packages) {
+          const packages = parseInt(formData.counter_packages) || 0;
+          const qtyPerPackage = parseInt(formData.default_quantity_per_package) || 1;
+          return packages * qtyPerPackage;
+        }
+        return 0;
+      })(),
+      quantity_vault: (() => {
+        if (formData.vault_units) return parseInt(formData.vault_units) || 0;
+        if (formData.vault_packages) {
+          const packages = parseInt(formData.vault_packages) || 0;
+          const qtyPerPackage = parseInt(formData.default_quantity_per_package) || 1;
+          return packages * qtyPerPackage;
+        }
+        return 0;
+      })(),
       is_opened: formData.is_opened,
       default_quantity_per_package: formData.default_quantity_per_package ? parseInt(formData.default_quantity_per_package) : null,
       min_threshold: parseInt(formData.min_threshold) || 10,
@@ -554,14 +676,105 @@ export default function Inventory() {
           <h1 className="text-2xl font-bold text-foreground">ניהול מלאי</h1>
           <p className="text-muted-foreground">ניהול סוגי כרטיסים וכמויות</p>
         </div>
-        <Button 
-          onClick={() => { resetForm(); setDialogOpen(true); }}
-          className="bg-theme-gradient"
-          disabled={user?.role === 'assistant' && !hasPermission('inventory_add')}
-        >
-          <Plus className="h-4 w-4 ml-2" />
-          הוסף סוג כרטיס
-        </Button>
+        <Popover open={addTicketOpen} onOpenChange={setAddTicketOpen}>
+          <PopoverAnchor asChild>
+            <div className="relative w-full sm:w-80">
+              <Search className="absolute right-3 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground pointer-events-none z-10" />
+              <Input
+                placeholder="חפש כרטיס להוספה למלאי..."
+                value={addTicketSearch}
+                onChange={(e) => {
+                  setAddTicketSearch(e.target.value);
+                  setAddTicketOpen(true);
+                }}
+                onFocus={() => setAddTicketOpen(true)}
+                className="pr-10"
+                disabled={user?.role === 'assistant' && !hasPermission('inventory_add')}
+              />
+            </div>
+          </PopoverAnchor>
+          <PopoverContent className="w-[var(--radix-popover-anchor-width)] p-0" align="start" dir="rtl" onOpenAutoFocus={(e) => e.preventDefault()}>
+            <Command>
+              <CommandInput 
+                placeholder="חפש כרטיס..." 
+                value={addTicketSearch}
+                onValueChange={(value) => {
+                  setAddTicketSearch(value);
+                  setAddTicketOpen(true);
+                }}
+              />
+              <CommandList>
+                <CommandEmpty>לא נמצאו כרטיסים</CommandEmpty>
+                <CommandGroup>
+                  {allAvailableTickets
+                    .filter(ticket => {
+                      // Don't show tickets that already have inventory
+                      const hasInventory = tickets.some(t => t.id === ticket.id);
+                      if (hasInventory) return false;
+                      
+                      if (!addTicketSearch) return true;
+                      const search = addTicketSearch.toLowerCase();
+                      return ticket.name?.toLowerCase().includes(search) ||
+                             ticket.nickname?.toLowerCase().includes(search) ||
+                             ticket.code?.toLowerCase().includes(search);
+                    })
+                    .map((ticket) => {
+                      return (
+                        <CommandItem
+                          key={ticket.id}
+                          value={ticket.name}
+                          onSelect={() => {
+                            // Open dialog to add quantities for this ticket
+                            setSelectedTicket(ticket);
+                            setFormData({
+                              name: ticket.name,
+                              nickname: ticket.nickname || "",
+                              price: ticket.price?.toString() || "",
+                              code: ticket.code || "",
+                              counter_units: "",
+                              counter_packages: "",
+                              vault_units: "",
+                              vault_packages: "",
+                              is_opened: false,
+                              default_quantity_per_package: ticket.default_quantity_per_package?.toString() || "",
+                              min_threshold: ticket.min_threshold?.toString() || "10",
+                              color: ticket.color || "blue",
+                              image_url: ticket.image_url || "",
+                              use_image: !!ticket.image_url,
+                              is_active: ticket.is_active !== false,
+                              ticket_category: ticket.ticket_category || "custom",
+                            });
+                            setAddTicketOpen(false);
+                            setAddTicketSearch("");
+                            setDialogOpen(true);
+                          }}
+                          className="cursor-pointer"
+                        >
+                            <div className="flex items-center gap-3 w-full">
+                            {ticket.image_url && (
+                              <img 
+                                src={ticket.image_url} 
+                                alt={ticket.name}
+                                className="w-10 h-10 rounded object-cover"
+                                loading="lazy"
+                              />
+                            )}
+                            <div className="flex-1 text-right">
+                              <p className="font-medium">{ticket.name}</p>
+                              {ticket.nickname && (
+                                <p className="text-xs text-muted-foreground">"{ticket.nickname}"</p>
+                              )}
+                              <p className="text-xs text-muted-foreground">₪{ticket.price}</p>
+                            </div>
+                          </div>
+                        </CommandItem>
+                      );
+                    })}
+                </CommandGroup>
+              </CommandList>
+            </Command>
+          </PopoverContent>
+        </Popover>
       </div>
 
       {/* Statistics Cards */}
@@ -1037,213 +1250,445 @@ export default function Inventory() {
         <DialogContent className="sm:max-w-md max-h-[90vh] flex flex-col" dir="rtl">
           <DialogHeader className="flex-shrink-0">
             <DialogTitle>
-              {selectedTicket ? "עריכת סוג כרטיס" : "הוספת סוג כרטיס"}
+              {(() => {
+                if (!selectedTicket) return "הוספת סוג כרטיס";
+                const ticketInInventory = tickets.find(t => t.id === selectedTicket.id);
+                if (ticketInInventory) return "עריכת סוג כרטיס";
+                return `הוספת ${selectedTicket.name} למלאי`;
+              })()}
             </DialogTitle>
           </DialogHeader>
 
           <div className="space-y-4 py-4 overflow-y-auto flex-1 min-h-0">
-            <div className="space-y-2">
-              <Label>שם הכרטיס</Label>
-              <Input
-                value={formData.name}
-                onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                placeholder="למשל: כרטיס מזל זהב"
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label>כינוי (אופציונלי)</Label>
-              <Input
-                value={formData.nickname}
-                onChange={(e) => setFormData({ ...formData, nickname: e.target.value })}
-                placeholder="למשל: מטוסים (לכרטיס אואזיס)"
-              />
-              <p className="text-xs text-slate-500">כינוי שיופיע ליד השם המקורי</p>
-            </div>
-
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label>מחיר (₪)</Label>
-                <Input
-                  type="number"
-                  value={formData.price}
-                  onChange={(e) => setFormData({ ...formData, price: e.target.value })}
-                  placeholder="10"
-                  readOnly={!!selectedTicket}
-                  disabled={!!selectedTicket}
-                  className={selectedTicket ? "bg-accent cursor-not-allowed" : ""}
-                />
-                {selectedTicket && (
-                  <p className="text-xs text-slate-500">מחיר לא ניתן לשינוי</p>
-                )}
-              </div>
-              <div className="space-y-2">
-                <Label>קוד</Label>
-                <Input
-                  value={formData.code || (selectedTicket ? selectedTicket.code : "")}
-                  readOnly
-                  disabled
-                  placeholder={selectedTicket ? "קוד קיים" : "ייווצר אוטומטית"}
-                  className="bg-accent cursor-not-allowed"
-                />
-                {!selectedTicket && (
-                  <p className="text-xs text-slate-500">הקוד ייווצר אוטומטית בעת שמירה</p>
-                )}
-                {selectedTicket && (
-                  <p className="text-xs text-slate-500">קוד לא ניתן לשינוי</p>
-                )}
-              </div>
-            </div>
-
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label>כמות בדלפק</Label>
-                <Input
-                  type="number"
-                  value={formData.quantity_counter}
-                  onChange={(e) => setFormData({ ...formData, quantity_counter: e.target.value })}
-                  placeholder="0"
-                  min="0"
-                />
-                <p className="text-xs text-slate-500">כרטיסים זמינים למכירה</p>
-              </div>
-              <div className="space-y-2">
-                <Label>כמות בכספת</Label>
-                <Input
-                  type="number"
-                  value={formData.quantity_vault}
-                  onChange={(e) => setFormData({ ...formData, quantity_vault: e.target.value })}
-                  placeholder="0"
-                  min="0"
-                />
-                <p className="text-xs text-slate-500">כרטיסים לא זמינים למכירה</p>
-              </div>
-            </div>
-
-            {parseInt(formData.quantity_counter) > 0 && (
-              <div className="space-y-2">
-                <div className="flex items-center gap-2">
-                  <input
-                    type="checkbox"
-                    id="is_opened"
-                    checked={formData.is_opened}
-                    onChange={(e) => setFormData({ ...formData, is_opened: e.target.checked })}
-                    className="h-4 w-4"
-                  />
-                  <Label htmlFor="is_opened" className="cursor-pointer">
-                    הכרטיסים בדלפק פתוחים (זמינים למכירה)
-                  </Label>
-                </div>
-                <p className="text-xs text-slate-500">אם לא מסומן, הכרטיסים לא יוצגו במערכת המכירה</p>
-              </div>
-            )}
-
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label>כמות יחידות בחבילה</Label>
-                <Input
-                  type="number"
-                  value={formData.default_quantity_per_package}
-                  onChange={(e) => setFormData({ ...formData, default_quantity_per_package: e.target.value })}
-                  placeholder="50"
-                />
-                <p className="text-xs text-slate-500">כמות יחידות בחבילה חדשה (אופציונלי)</p>
-              </div>
-              <div className="space-y-2">
-                <Label>סף התראה</Label>
-                <Input
-                  type="number"
-                  value={formData.min_threshold}
-                  onChange={(e) => setFormData({ ...formData, min_threshold: e.target.value })}
-                  placeholder="10"
-                />
-              </div>
-            </div>
-
-            <div className="space-y-3">
-              <div className="flex items-center justify-between">
-                <Label>עיצוב הכרטיס</Label>
-                <div className="flex items-center gap-2">
-                  <Button
-                    type="button"
-                    variant={!formData.use_image ? "default" : "outline"}
-                    size="sm"
-                    onClick={() => setFormData({ ...formData, use_image: false, image_url: "" })}
-                  >
-                    <Palette className="h-4 w-4 ml-2" />
-                    צבע
-                  </Button>
-                  <Button
-                    type="button"
-                    variant={formData.use_image ? "default" : "outline"}
-                    size="sm"
-                    onClick={() => setFormData({ ...formData, use_image: true, color: "blue" })}
-                  >
-                    <Package className="h-4 w-4 ml-2" />
-                    תמונה
-                  </Button>
-                </div>
-              </div>
+            {(() => {
+              const ticketInInventory = selectedTicket ? tickets.find(t => t.id === selectedTicket.id) : null;
+              const isAddingExistingTicket = selectedTicket && !ticketInInventory;
               
-              {!formData.use_image ? (
-                <div className="space-y-2">
-                  <Label>צבע</Label>
-                  <Select
-                    value={formData.color}
-                    onValueChange={(value) => setFormData({ ...formData, color: value })}
-                  >
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {colorOptions.map((color) => (
-                        <SelectItem key={color.value} value={color.value}>
-                          <div className="flex items-center gap-2">
-                            <div className={`w-4 h-4 rounded-full ${color.class}`} />
-                            <span>{color.label}</span>
-                          </div>
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-              ) : (
-                <div className="space-y-2">
-                  <Label>URL תמונה</Label>
-                  <Input
-                    value={formData.image_url}
-                    onChange={(e) => setFormData({ ...formData, image_url: e.target.value })}
-                    placeholder="https://example.com/image.jpg"
-                  />
-                  <div className="bg-amber-50 border border-amber-200 rounded-lg p-3">
-                    <p className="text-xs text-amber-800 font-medium mb-1">⚠️ זכויות יוצרים</p>
-                    <p className="text-xs text-amber-700">
-                      יש לוודא שיש לך זכויות שימוש בתמונה. שימוש בתמונות ללא רישיון עלול להפר זכויות יוצרים.
-                    </p>
+              // If adding existing ticket to inventory, show only quantity fields
+              if (isAddingExistingTicket) {
+                return (
+                  <>
+                    <div className="p-4 bg-accent rounded-lg space-y-2">
+                      <p className="font-medium text-foreground">{selectedTicket.name}</p>
+                      {selectedTicket.nickname && (
+                        <p className="text-sm text-muted-foreground">"{selectedTicket.nickname}"</p>
+                      )}
+                      <p className="text-sm text-muted-foreground">מחיר: ₪{selectedTicket.price}</p>
+                    </div>
+                    
+                    {/* Counter Section */}
+                    <div className="space-y-3 p-4 border rounded-lg">
+                      <Label className="text-base font-semibold">דלפק</Label>
+                      <div className="grid grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                          <Label>מספר יחידות</Label>
+                          <Input
+                            type="number"
+                            value={formData.counter_units}
+                            onChange={(e) => {
+                              const val = e.target.value;
+                              const numVal = parseInt(val) || 0;
+                              setFormData({ 
+                                ...formData, 
+                                counter_units: val,
+                                counter_packages: numVal > 0 ? "" : formData.counter_packages // Clear packages only if units > 0
+                              });
+                            }}
+                            placeholder="0"
+                            min="0"
+                            disabled={!!formData.counter_packages && parseInt(formData.counter_packages) > 0}
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label>מספר חבילות</Label>
+                          <Input
+                            type="number"
+                            value={formData.counter_packages}
+                            onChange={(e) => {
+                              const val = e.target.value;
+                              const numVal = parseInt(val) || 0;
+                              setFormData({ 
+                                ...formData, 
+                                counter_packages: val,
+                                counter_units: numVal > 0 ? "" : formData.counter_units // Clear units only if packages > 0
+                              });
+                            }}
+                            placeholder="0"
+                            min="0"
+                            disabled={!!formData.counter_units && parseInt(formData.counter_units) > 0}
+                          />
+                          {selectedTicket.default_quantity_per_package && (
+                            <p className="text-xs text-muted-foreground">
+                              {formData.counter_packages ? 
+                                `סה"כ: ${(parseInt(formData.counter_packages) || 0) * selectedTicket.default_quantity_per_package} יחידות` :
+                                `${selectedTicket.default_quantity_per_package} יחידות בחבילה`
+                              }
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Vault Section */}
+                    <div className="space-y-3 p-4 border rounded-lg">
+                      <Label className="text-base font-semibold">כספת</Label>
+                      <div className="grid grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                          <Label>מספר יחידות</Label>
+                          <Input
+                            type="number"
+                            value={formData.vault_units}
+                            onChange={(e) => {
+                              const val = e.target.value;
+                              const numVal = parseInt(val) || 0;
+                              setFormData({ 
+                                ...formData, 
+                                vault_units: val,
+                                vault_packages: numVal > 0 ? "" : formData.vault_packages // Clear packages only if units > 0
+                              });
+                            }}
+                            placeholder="0"
+                            min="0"
+                            disabled={!!formData.vault_packages && parseInt(formData.vault_packages) > 0}
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label>מספר חבילות</Label>
+                          <Input
+                            type="number"
+                            value={formData.vault_packages}
+                            onChange={(e) => {
+                              const val = e.target.value;
+                              const numVal = parseInt(val) || 0;
+                              setFormData({ 
+                                ...formData, 
+                                vault_packages: val,
+                                vault_units: numVal > 0 ? "" : formData.vault_units // Clear units only if packages > 0
+                              });
+                            }}
+                            placeholder="0"
+                            min="0"
+                            disabled={!!formData.vault_units && parseInt(formData.vault_units) > 0}
+                          />
+                          {selectedTicket.default_quantity_per_package && (
+                            <p className="text-xs text-muted-foreground">
+                              {formData.vault_packages ? 
+                                `סה"כ: ${(parseInt(formData.vault_packages) || 0) * selectedTicket.default_quantity_per_package} יחידות` :
+                                `${selectedTicket.default_quantity_per_package} יחידות בחבילה`
+                              }
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      <Switch
+                        id="is_opened"
+                        checked={formData.is_opened}
+                        onCheckedChange={(checked) => setFormData({ ...formData, is_opened: checked })}
+                      />
+                      <Label htmlFor="is_opened" className="cursor-pointer">
+                        הכרטיסים בדלפק פתוחים
+                      </Label>
+                    </div>
+                  </>
+                );
+              }
+              
+              // Full form for new ticket or editing existing ticket in inventory
+              return (
+                <>
+                  <div className="space-y-2">
+                    <Label>שם הכרטיס</Label>
+                    <Input
+                      value={formData.name}
+                      onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                      placeholder="למשל: כרטיס מזל זהב"
+                    />
                   </div>
-                  {formData.image_url && (
-                    <div className="mt-2">
-                      <img 
-                        src={formData.image_url} 
-                        alt="תצוגה מקדימה" 
-                        className="w-full h-32 object-cover rounded-lg border border-slate-200"
-                        onError={(e) => {
-                          e.target.style.display = 'none';
-                        }}
+
+                  <div className="space-y-2">
+                    <Label>כינוי (אופציונלי)</Label>
+                    <Input
+                      value={formData.nickname}
+                      onChange={(e) => setFormData({ ...formData, nickname: e.target.value })}
+                      placeholder="למשל: מטוסים (לכרטיס אואזיס)"
+                    />
+                    <p className="text-xs text-slate-500">כינוי שיופיע ליד השם המקורי</p>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label>מחיר (₪)</Label>
+                      <Input
+                        type="number"
+                        value={formData.price}
+                        onChange={(e) => setFormData({ ...formData, price: e.target.value })}
+                        placeholder="10"
+                        readOnly={!!selectedTicket}
+                        disabled={!!selectedTicket}
+                        className={selectedTicket ? "bg-accent cursor-not-allowed" : ""}
+                      />
+                      {selectedTicket && (
+                        <p className="text-xs text-slate-500">מחיר לא ניתן לשינוי</p>
+                      )}
+                    </div>
+                    <div className="space-y-2">
+                      <Label>קוד</Label>
+                      <Input
+                        value={formData.code || (selectedTicket ? selectedTicket.code : "")}
+                        readOnly
+                        disabled
+                        placeholder={selectedTicket ? "קוד קיים" : "ייווצר אוטומטית"}
+                        className="bg-accent cursor-not-allowed"
+                      />
+                      {!selectedTicket && (
+                        <p className="text-xs text-slate-500">הקוד ייווצר אוטומטית בעת שמירה</p>
+                      )}
+                      {selectedTicket && (
+                        <p className="text-xs text-slate-500">קוד לא ניתן לשינוי</p>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Counter Section */}
+                  <div className="space-y-3 p-4 border rounded-lg">
+                    <Label className="text-base font-semibold">דלפק</Label>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <Label>מספר יחידות</Label>
+                        <Input
+                          type="number"
+                          value={formData.counter_units}
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            const numVal = parseInt(val) || 0;
+                            setFormData({ 
+                              ...formData, 
+                              counter_units: val,
+                              counter_packages: numVal > 0 ? "" : formData.counter_packages // Clear packages only if units > 0
+                            });
+                          }}
+                          placeholder="0"
+                          min="0"
+                          disabled={!!formData.counter_packages && parseInt(formData.counter_packages) > 0}
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label>מספר חבילות</Label>
+                        <Input
+                          type="number"
+                          value={formData.counter_packages}
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            const numVal = parseInt(val) || 0;
+                            setFormData({ 
+                              ...formData, 
+                              counter_packages: val,
+                              counter_units: numVal > 0 ? "" : formData.counter_units // Clear units only if packages > 0
+                            });
+                          }}
+                          placeholder="0"
+                          min="0"
+                          disabled={!!formData.counter_units && parseInt(formData.counter_units) > 0}
+                        />
+                        {formData.default_quantity_per_package && (
+                          <p className="text-xs text-muted-foreground">
+                            {formData.counter_packages ? 
+                              `סה"כ: ${(parseInt(formData.counter_packages) || 0) * parseInt(formData.default_quantity_per_package)} יחידות` :
+                              `${formData.default_quantity_per_package} יחידות בחבילה`
+                            }
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Vault Section */}
+                  <div className="space-y-3 p-4 border rounded-lg">
+                    <Label className="text-base font-semibold">כספת</Label>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <Label>מספר יחידות</Label>
+                        <Input
+                          type="number"
+                          value={formData.vault_units}
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            const numVal = parseInt(val) || 0;
+                            setFormData({ 
+                              ...formData, 
+                              vault_units: val,
+                              vault_packages: numVal > 0 ? "" : formData.vault_packages // Clear packages only if units > 0
+                            });
+                          }}
+                          placeholder="0"
+                          min="0"
+                          disabled={!!formData.vault_packages && parseInt(formData.vault_packages) > 0}
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label>מספר חבילות</Label>
+                        <Input
+                          type="number"
+                          value={formData.vault_packages}
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            const numVal = parseInt(val) || 0;
+                            setFormData({ 
+                              ...formData, 
+                              vault_packages: val,
+                              vault_units: numVal > 0 ? "" : formData.vault_units // Clear units only if packages > 0
+                            });
+                          }}
+                          placeholder="0"
+                          min="0"
+                          disabled={!!formData.vault_units && parseInt(formData.vault_units) > 0}
+                        />
+                        {formData.default_quantity_per_package && (
+                          <p className="text-xs text-muted-foreground">
+                            {formData.vault_packages ? 
+                              `סה"כ: ${(parseInt(formData.vault_packages) || 0) * parseInt(formData.default_quantity_per_package)} יחידות` :
+                              `${formData.default_quantity_per_package} יחידות בחבילה`
+                            }
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+
+                  {(() => {
+                    const counterQty = formData.counter_units ? parseInt(formData.counter_units) : 
+                                      (formData.counter_packages ? (parseInt(formData.counter_packages) || 0) * (parseInt(formData.default_quantity_per_package) || 1) : 0);
+                    return counterQty > 0 && (
+                      <div className="space-y-2">
+                        <div className="flex items-center gap-2">
+                          <input
+                            type="checkbox"
+                            id="is_opened"
+                            checked={formData.is_opened}
+                            onChange={(e) => setFormData({ ...formData, is_opened: e.target.checked })}
+                            className="h-4 w-4"
+                          />
+                          <Label htmlFor="is_opened" className="cursor-pointer">
+                            הכרטיסים בדלפק פתוחים (זמינים למכירה)
+                          </Label>
+                        </div>
+                        <p className="text-xs text-slate-500">אם לא מסומן, הכרטיסים לא יוצגו במערכת המכירה</p>
+                      </div>
+                    );
+                  })()}
+
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label>כמות יחידות בחבילה</Label>
+                      <Input
+                        type="number"
+                        value={formData.default_quantity_per_package}
+                        onChange={(e) => setFormData({ ...formData, default_quantity_per_package: e.target.value })}
+                        placeholder="50"
+                      />
+                      <p className="text-xs text-slate-500">כמות יחידות בחבילה חדשה (אופציונלי)</p>
+                    </div>
+                    <div className="space-y-2">
+                      <Label>סף התראה</Label>
+                      <Input
+                        type="number"
+                        value={formData.min_threshold}
+                        onChange={(e) => setFormData({ ...formData, min_threshold: e.target.value })}
+                        placeholder="10"
                       />
                     </div>
-                  )}
-                </div>
-              )}
-            </div>
+                  </div>
 
-            <div className="flex items-center justify-between">
-              <Label>כרטיס פעיל</Label>
-              <Switch
-                checked={formData.is_active}
-                onCheckedChange={(checked) => setFormData({ ...formData, is_active: checked })}
-              />
-            </div>
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between">
+                      <Label>עיצוב הכרטיס</Label>
+                      <div className="flex items-center gap-2">
+                        <Button
+                          type="button"
+                          variant={!formData.use_image ? "default" : "outline"}
+                          size="sm"
+                          onClick={() => setFormData({ ...formData, use_image: false, image_url: "" })}
+                        >
+                          <Palette className="h-4 w-4 ml-2" />
+                          צבע
+                        </Button>
+                        <Button
+                          type="button"
+                          variant={formData.use_image ? "default" : "outline"}
+                          size="sm"
+                          onClick={() => setFormData({ ...formData, use_image: true, color: "blue" })}
+                        >
+                          <Package className="h-4 w-4 ml-2" />
+                          תמונה
+                        </Button>
+                      </div>
+                    </div>
+                    
+                    {!formData.use_image ? (
+                      <div className="space-y-2">
+                        <Label>צבע</Label>
+                        <Select
+                          value={formData.color}
+                          onValueChange={(value) => setFormData({ ...formData, color: value })}
+                        >
+                          <SelectTrigger>
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {colorOptions.map((color) => (
+                              <SelectItem key={color.value} value={color.value}>
+                                <div className="flex items-center gap-2">
+                                  <div className={`w-4 h-4 rounded-full ${color.class}`} />
+                                  <span>{color.label}</span>
+                                </div>
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    ) : (
+                      <div className="space-y-2">
+                        <Label>URL תמונה</Label>
+                        <Input
+                          value={formData.image_url}
+                          onChange={(e) => setFormData({ ...formData, image_url: e.target.value })}
+                          placeholder="https://example.com/image.jpg"
+                        />
+                        <div className="bg-amber-50 border border-amber-200 rounded-lg p-3">
+                          <p className="text-xs text-amber-800 font-medium mb-1">⚠️ זכויות יוצרים</p>
+                          <p className="text-xs text-amber-700">
+                            יש לוודא שיש לך זכויות שימוש בתמונה. שימוש בתמונות ללא רישיון עלול להפר זכויות יוצרים.
+                          </p>
+                        </div>
+                        {formData.image_url && (
+                          <div className="mt-2">
+                            <img 
+                              src={formData.image_url} 
+                              alt="תצוגה מקדימה" 
+                              className="w-full h-32 object-cover rounded-lg border border-slate-200"
+                              onError={(e) => {
+                                e.target.style.display = 'none';
+                              }}
+                            />
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="flex items-center justify-between">
+                    <Label>כרטיס פעיל</Label>
+                    <Switch
+                      checked={formData.is_active}
+                      onCheckedChange={(checked) => setFormData({ ...formData, is_active: checked })}
+                    />
+                  </div>
+                </>
+              );
+            })()}
           </div>
 
           <DialogFooter className="gap-3 sm:gap-3 flex-shrink-0 border-t pt-4 mt-4">
@@ -1252,10 +1697,23 @@ export default function Inventory() {
             </Button>
             <Button 
               onClick={handleSubmit}
-              disabled={!formData.name || !formData.price}
+              disabled={(() => {
+                const ticketInInventory = selectedTicket ? tickets.find(t => t.id === selectedTicket.id) : null;
+                const isAddingExistingTicket = selectedTicket && !ticketInInventory;
+                if (isAddingExistingTicket) {
+                  // For adding existing ticket, only need quantities
+                  return false;
+                }
+                return !formData.name || !formData.price;
+              })()}
               className="bg-theme-gradient"
             >
-              {selectedTicket ? "עדכן" : "הוסף"}
+              {(() => {
+                if (!selectedTicket) return "הוסף";
+                const ticketInInventory = tickets.find(t => t.id === selectedTicket.id);
+                if (ticketInInventory) return "עדכן";
+                return "הוסף למלאי";
+              })()}
             </Button>
           </DialogFooter>
         </DialogContent>
