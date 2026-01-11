@@ -105,6 +105,7 @@ export default function Layout({ children, currentPageName }) {
     { name: "פרטי קיוסק", icon: Store, page: "KioskDetails", roles: ['franchisee'], perm: "kiosk_details_view" },
     { name: "משתמשים", icon: Users, page: "UsersManagement", roles: ['owner', 'franchisee'], perm: "users_view" },
     { name: "קיוסקים", icon: Store, page: "KiosksManagement", roles: ['system_manager'] },
+    { name: "כרטיסים", icon: Package, page: "TicketTypesManagement", roles: ['system_manager'] },
     { name: "יצירת קיוסק", icon: Store, page: "KioskSelfCreate", roles: ['franchisee'] },
     { name: "לוח בקרה - קיוסקים", icon: LayoutDashboard, page: "KiosksDashboard", roles: ['system_manager'] },
     { name: "יצירת משתמשים", icon: ShieldAlert, page: "FranchiseesManagement", roles: ['system_manager'] },

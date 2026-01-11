@@ -22,6 +22,7 @@ const FranchiseesManagement = lazy(() => import("./FranchiseesManagement"));
 const KioskDetails = lazy(() => import("./KioskDetails"));
 const KioskSelfCreate = lazy(() => import("./KioskSelfCreate"));
 const Onboarding = lazy(() => import("./Onboarding"));
+const TicketTypesManagement = lazy(() => import("./TicketTypesManagement"));
 
 import { BrowserRouter as Router, Route, Routes, useLocation } from 'react-router-dom';
 
@@ -52,6 +53,7 @@ const PAGES = {
     KioskDetails: KioskDetails,
     KioskSelfCreate: KioskSelfCreate,
     Onboarding: Onboarding,
+    TicketTypesManagement: TicketTypesManagement,
 }
 
 function _getCurrentPage(url) {
@@ -117,6 +119,8 @@ function PagesContent() {
                     <Route path="/KioskSelfCreate" element={<KioskSelfCreate />} />
                     
                     <Route path="/Onboarding" element={<Onboarding />} />
+                    
+                    <Route path="/TicketTypesManagement" element={<TicketTypesManagement />} />
                     
                 </Routes>
             </Suspense>
