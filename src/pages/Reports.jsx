@@ -593,7 +593,8 @@ export default function Reports() {
                 const quantityCounter = ticket.quantity_counter ?? 0;
                 const quantityVault = ticket.quantity_vault ?? 0;
                 const totalQuantity = quantityCounter + quantityVault;
-                const needsOpening = quantityCounter > 0 && !ticket.is_opened;
+                // is_opened field removed - no longer used
+                const needsOpening = false; // Always false now
                 
                 return (
                   <div 
@@ -649,49 +650,7 @@ export default function Reports() {
         </CardContent>
       </Card>
 
-      {/* Tickets Needing Opening */}
-      {tickets.filter(t => {
-        const quantityCounter = t.quantity_counter ?? 0;
-        return quantityCounter > 0 && !t.is_opened && t.is_active;
-      }).length > 0 && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-lg">כרטיסים שצריך לפתוח</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-              {tickets
-                .filter(t => {
-                  const quantityCounter = t.quantity_counter ?? 0;
-                  return quantityCounter > 0 && !t.is_opened && t.is_active;
-                })
-                .map(ticket => {
-                  const quantityCounter = ticket.quantity_counter ?? 0;
-                  
-                  return (
-                    <div 
-                      key={ticket.id} 
-                      className="p-4 rounded-lg border bg-orange-50 dark:bg-orange-900/30 border-orange-200 dark:border-orange-800/50"
-                    >
-                      <div className="flex items-center justify-between mb-2">
-                        <span className="font-medium text-foreground">{ticket.name}</span>
-                        <span className="text-sm font-bold text-orange-600 dark:text-orange-400">
-                          צריך לפתוח
-                        </span>
-                      </div>
-                      <p className="text-sm text-foreground">
-                        כמות בדלפק: <strong>{quantityCounter}</strong> כרטיסים
-                      </p>
-                      <p className="text-xs text-muted-foreground mt-1">
-                        הכרטיסים לא זמינים למכירה עד שיפתחו
-                      </p>
-                    </div>
-                  );
-                })}
-            </div>
-          </CardContent>
-        </Card>
-      )}
+      {/* Tickets Needing Opening - Removed (is_opened no longer used) */}
     </div>
   );
 }

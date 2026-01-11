@@ -74,16 +74,47 @@ export default function SellerPOS() {
     staleTime: 2 * 60 * 1000, // 2 minutes for notifications
   });
 
+  // Load sales to calculate demand (total sales count per ticket)
+  const { data: allSales = [] } = useQuery({
+    queryKey: ['sales-for-demand', currentKiosk?.id],
+    queryFn: async () => {
+      if (!currentKiosk?.id) return [];
+      try {
+        const { getSalesByKiosk } = await import('@/firebase/services/sales');
+        return await getSalesByKiosk(currentKiosk.id);
+      } catch (error) {
+        console.error('Error loading sales for demand calculation:', error);
+        return [];
+      }
+    },
+    enabled: !kioskLoading && !!currentKiosk?.id,
+    staleTime: 5 * 60 * 1000, // 5 minutes - sales data doesn't change frequently
+  });
+
+  // Calculate sales count per ticket (demand)
+  const ticketSalesCount = useMemo(() => {
+    const counts = {};
+    allSales
+      .filter(sale => sale.status === 'completed') // Only count completed sales
+      .forEach(sale => {
+        sale.items?.forEach(item => {
+          const ticketId = item.ticket_type_id;
+          if (ticketId) {
+            counts[ticketId] = (counts[ticketId] || 0) + (item.quantity || 0);
+          }
+        });
+      });
+    return counts;
+  }, [allSales]);
+
   const filteredTickets = useMemo(() => {
     return tickets.filter(t => {
     // Only show tickets that are available for sale:
     // - quantity_counter > 0 (has stock on counter)
-    // - is_opened === true (tickets are opened)
     // - is_active === true (ticket type is active)
     const quantityCounter = t.quantity_counter ?? 0;
-    const isOpened = t.is_opened ?? false;
     
-    if (quantityCounter <= 0 || !isOpened || !t.is_active) {
+    if (quantityCounter <= 0 || !t.is_active) {
       return false;
     }
     
@@ -106,6 +137,15 @@ export default function SellerPOS() {
     return true;
     });
   }, [tickets, searchTerm, priceFilter]);
+
+  // Sort tickets by demand (sales count) - highest first
+  const sortedTickets = useMemo(() => {
+    return [...filteredTickets].sort((a, b) => {
+      const salesA = ticketSalesCount[a.id] || 0;
+      const salesB = ticketSalesCount[b.id] || 0;
+      return salesB - salesA; // Descending order (highest demand first)
+    });
+  }, [filteredTickets, ticketSalesCount]);
 
   const handleTicketSelect = (ticket) => {
     setSelectedTicket(ticket);
@@ -199,7 +239,6 @@ export default function SellerPOS() {
         if (ticket) {
           const currentQuantityCounter = ticket.quantity_counter ?? 0;
           const currentQuantityVault = ticket.quantity_vault ?? 0;
-          const currentIsOpened = ticket.is_opened ?? false;
           const newQuantityCounter = currentQuantityCounter - item.quantity;
           
           if (newQuantityCounter < 0) {
@@ -210,7 +249,6 @@ export default function SellerPOS() {
           await TicketType.update(ticketId, {
             quantity_counter: newQuantityCounter,
             quantity_vault: currentQuantityVault,
-            is_opened: currentIsOpened,
           }, currentKiosk.id);
 
           // Check for stock notifications (wrap in try-catch to not fail the sale)
@@ -398,7 +436,7 @@ export default function SellerPOS() {
                 </div>
               ))}
             </div>
-          ) : filteredTickets.length === 0 ? (
+          ) : sortedTickets.length === 0 ? (
             <div className="flex items-center justify-center py-12">
               <div className="text-center">
                 <Package className="h-12 w-12 mx-auto mb-4 text-muted-foreground opacity-50" />
@@ -408,7 +446,7 @@ export default function SellerPOS() {
             </div>
           ) : (
             <TicketGrid
-              tickets={filteredTickets}
+              tickets={sortedTickets}
               onSelect={handleTicketSelect}
               selectedItems={cartItems}
             />

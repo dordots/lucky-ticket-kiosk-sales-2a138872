@@ -74,12 +74,7 @@ export const normalizeTicketType = (ticketData, kioskId = null) => {
   // Calculate total quantity (for backward compatibility)
   normalized.quantity = normalized.quantity_counter + normalized.quantity_vault;
   
-  // is_opened is per kiosk, stored in amount_is_opened map
-  if (kioskId && normalized.amount_is_opened) {
-    normalized.is_opened = normalized.amount_is_opened[kioskId] ?? false;
-  } else {
-    normalized.is_opened = normalized.is_opened ?? false;
-  }
+  // is_opened field removed - no longer used
   
   return normalized;
 };
@@ -203,22 +198,19 @@ export const createTicketType = async (ticketTypeData) => {
     const ticketTypesRef = collection(db, COLLECTION_NAME);
     
     // Extract kiosk-specific data if provided
-    const { kiosk_id, quantity_counter, quantity_vault, is_opened, ...ticketData } = ticketTypeData;
+    const { kiosk_id, quantity_counter, quantity_vault, ...ticketData } = ticketTypeData;
     
     // Initialize amount map
     const amount = {};
-    const amount_is_opened = {};
     
     // If kiosk_id and quantities provided, add to amount map
     if (kiosk_id && (quantity_counter !== undefined || quantity_vault !== undefined)) {
       amount[kiosk_id] = formatAmount(quantity_counter || 0, quantity_vault || 0);
-      amount_is_opened[kiosk_id] = is_opened ?? false;
     }
     
     const newTicketType = {
       ...ticketData,
       amount,
-      amount_is_opened,
       created_date: Timestamp.now(),
       updated_date: Timestamp.now()
     };
@@ -247,10 +239,9 @@ export const updateTicketType = async (ticketTypeId, updateData, kioskId = null)
     
     // Get current amount map
     const amount = current.amount || {};
-    const amount_is_opened = current.amount_is_opened || {};
     
     // Extract kiosk-specific updates
-    const { quantity_counter, quantity_vault, is_opened, ...globalUpdates } = updateData;
+    const { quantity_counter, quantity_vault, ...globalUpdates } = updateData;
     
     // If kioskId and quantities provided, update amount map
     if (kioskId && (quantity_counter !== undefined || quantity_vault !== undefined)) {
@@ -261,17 +252,12 @@ export const updateTicketType = async (ticketTypeId, updateData, kioskId = null)
       const newVault = quantity_vault !== undefined ? quantity_vault : currentVault;
       
       amount[kioskId] = formatAmount(newCounter, newVault);
-      
-      if (is_opened !== undefined) {
-        amount_is_opened[kioskId] = is_opened;
-      }
     }
     
     // Prepare update
     const cleanUpdateData = {
       ...globalUpdates,
       amount,
-      amount_is_opened,
       updated_date: Timestamp.now()
     };
     
@@ -308,7 +294,6 @@ export const transferInventoryFromVaultToCounter = async (ticketTypeId, quantity
     await updateTicketType(ticketTypeId, {
       quantity_vault: newVault,
       quantity_counter: newCounter,
-      is_opened: false // New tickets from vault are not opened
     }, kioskId);
     
     return await getTicketTypeById(ticketTypeId, kioskId);

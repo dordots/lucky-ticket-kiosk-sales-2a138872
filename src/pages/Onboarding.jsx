@@ -83,7 +83,6 @@ export default function Onboarding() {
         initialData[ticket.id] = {
           quantity_counter: "",
           quantity_vault: "",
-          is_opened: false,
         };
       });
       setInventoryData(initialData);
@@ -145,15 +144,12 @@ export default function Onboarding() {
         const vault = ticket.default_quantity_per_package 
           ? vaultInput * ticket.default_quantity_per_package 
           : vaultInput;
-        const isOpened = data.is_opened;
-
         // Only update if there's actual inventory (counter or vault > 0)
         if (counter > 0 || vault > 0) {
           updates.push(
             ticketTypesService.updateTicketType(ticketId, {
               quantity_counter: counter,
               quantity_vault: vault,
-              is_opened: isOpened && counter > 0,
             }, currentKiosk.id)
           );
         }
@@ -424,7 +420,6 @@ export default function Onboarding() {
                         const data = inventoryData[ticket.id] || {
                           quantity_counter: "",
                           quantity_vault: "",
-                          is_opened: false,
                         };
                         const counter = parseInt(data.quantity_counter) || 0;
                         const vault = parseInt(data.quantity_vault) || 0;
@@ -513,23 +508,7 @@ export default function Onboarding() {
                                       </>
                                     )}
                                   </div>
-                                  {counter > 0 && (
-                                    <div className="space-y-1">
-                                      <Label className="text-xs">כרטיסים פתוחים</Label>
-                                      <div className="flex items-center gap-2 h-9">
-                                        <input
-                                          type="checkbox"
-                                          id={`opened-${ticket.id}`}
-                                          checked={data.is_opened}
-                                          onChange={(e) => updateInventoryData(ticket.id, 'is_opened', e.target.checked)}
-                                          className="h-4 w-4"
-                                        />
-                                        <Label htmlFor={`opened-${ticket.id}`} className="text-xs cursor-pointer">
-                                          הכרטיסים פתוחים
-                                        </Label>
-                                      </div>
-                                    </div>
-                                  )}
+                                  {/* is_opened field removed - no longer used */}
                                 </div>
                               </div>
                             </div>

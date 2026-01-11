@@ -97,12 +97,10 @@ export default function CancelSale() {
             if (ticket) {
               const currentQuantityCounter = ticket.quantity_counter ?? 0;
               const currentQuantityVault = ticket.quantity_vault ?? 0;
-              const currentIsOpened = ticket.is_opened ?? false;
               
               await TicketType.update(item.ticket_type_id, {
                 quantity_counter: currentQuantityCounter + item.quantity,
                 quantity_vault: currentQuantityVault,
-                is_opened: currentIsOpened,
               }, currentKiosk.id);
             }
           } catch (error) {

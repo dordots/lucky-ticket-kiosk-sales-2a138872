@@ -110,7 +110,6 @@ export default function Inventory() {
     // Vault fields (mutually exclusive)
     vault_units: "",
     vault_packages: "",
-    is_opened: false,
     default_quantity_per_package: "",
     min_threshold: "10",
     color: "blue",
@@ -123,7 +122,6 @@ export default function Inventory() {
   const [transferFormData, setTransferFormData] = useState({
     ticketId: "",
     quantity: "",
-    is_opened: false,
   });
   const [packagesDialogOpen, setPackagesDialogOpen] = useState(false);
   const [packagesFormData, setPackagesFormData] = useState({
@@ -132,14 +130,12 @@ export default function Inventory() {
     packages: "",
     destination: "counter", // "counter" or "vault"
     defaultQuantityPerPackage: null,
-    is_opened: false, // Whether the tickets are opened (only for counter)
   });
-  const [sortBy, setSortBy] = useState("name"); // name, price, quantity_counter, quantity_vault, total_quantity
+  const [sortBy, setSortBy] = useState("name"); // name, price, quantity_counter, quantity_vault, total_quantity, demand
   const [sortOrder, setSortOrder] = useState("asc"); // asc, desc
   const [advancedFilters, setAdvancedFilters] = useState({
     stockStatus: "all", // all, inStock, lowStock, outOfStock
     priceRange: "all", // all, 0-25, 25-50, 50-100, 100+
-    needsOpening: "all", // all, yes, no
     hasVaultStock: "all", // all, yes, no
   });
   const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
@@ -183,6 +179,39 @@ export default function Inventory() {
     enabled: !kioskLoading && !!currentKiosk?.id,
     staleTime: 2 * 60 * 1000, // 2 minutes
   });
+
+  // Load sales to calculate demand (total sales count per ticket)
+  const { data: allSales = [] } = useQuery({
+    queryKey: ['sales-for-demand-inventory', currentKiosk?.id],
+    queryFn: async () => {
+      if (!currentKiosk?.id) return [];
+      try {
+        const { getSalesByKiosk } = await import('@/firebase/services/sales');
+        return await getSalesByKiosk(currentKiosk.id);
+      } catch (error) {
+        console.error('Error loading sales for demand calculation:', error);
+        return [];
+      }
+    },
+    enabled: !kioskLoading && !!currentKiosk?.id,
+    staleTime: 5 * 60 * 1000, // 5 minutes - sales data doesn't change frequently
+  });
+
+  // Calculate sales count per ticket (demand)
+  const ticketSalesCount = useMemo(() => {
+    const counts = {};
+    allSales
+      .filter(sale => sale.status === 'completed') // Only count completed sales
+      .forEach(sale => {
+        sale.items?.forEach(item => {
+          const ticketId = item.ticket_type_id;
+          if (ticketId) {
+            counts[ticketId] = (counts[ticketId] || 0) + (item.quantity || 0);
+          }
+        });
+      });
+    return counts;
+  }, [allSales]);
 
   // Load all available tickets (including Pais) for the add ticket search
   const { data: allAvailableTickets = [] } = useQuery({
@@ -258,7 +287,6 @@ export default function Inventory() {
       counter_packages: "",
       vault_units: "",
       vault_packages: "",
-      is_opened: false,
       default_quantity_per_package: "",
       min_threshold: "10",
       color: "blue",
@@ -282,7 +310,6 @@ export default function Inventory() {
       counter_packages: "",
       vault_units: ticket.quantity_vault?.toString() || "0",
       vault_packages: "",
-      is_opened: ticket.is_opened ?? false,
       default_quantity_per_package: ticket.default_quantity_per_package?.toString() || "",
       min_threshold: ticket.min_threshold?.toString() || "10",
       color: ticket.color || "blue",
@@ -348,7 +375,6 @@ export default function Inventory() {
       await TicketType.update(selectedTicket.id, {
         quantity_counter,
         quantity_vault,
-        is_opened: formData.is_opened,
       }, currentKiosk.id);
 
       // Create audit log
@@ -363,7 +389,6 @@ export default function Inventory() {
             ticket_name: selectedTicket.name,
             quantity_counter,
             quantity_vault,
-            is_opened: formData.is_opened
           },
           kiosk_id: currentKiosk.id,
         });
@@ -417,7 +442,6 @@ export default function Inventory() {
         }
         return 0;
       })(),
-      is_opened: formData.is_opened,
       default_quantity_per_package: formData.default_quantity_per_package ? parseInt(formData.default_quantity_per_package) : null,
       min_threshold: parseInt(formData.min_threshold) || 10,
         color: formData.use_image ? null : formData.color,
@@ -581,15 +605,8 @@ export default function Inventory() {
       if (advancedFilters.priceRange === "100+" && price <= 100) return false;
     }
     
-    // Advanced filters - Needs Opening
-    if (advancedFilters.needsOpening !== "all") {
-      const quantityCounter = t.quantity_counter ?? 0;
-      const needsOpening = quantityCounter > 0 && !t.is_opened;
-      if (advancedFilters.needsOpening === "yes" && !needsOpening) return false;
-      if (advancedFilters.needsOpening === "no" && needsOpening) return false;
-    }
-    
     // Advanced filters - Has Vault Stock
+    // Note: Needs Opening filter removed - is_opened is now internal only
     if (advancedFilters.hasVaultStock !== "all") {
       const quantityVault = t.quantity_vault ?? 0;
       if (advancedFilters.hasVaultStock === "yes" && quantityVault === 0) return false;
@@ -638,6 +655,10 @@ export default function Inventory() {
         aValue = (a.quantity_counter ?? 0) + (a.quantity_vault ?? 0);
         bValue = (b.quantity_counter ?? 0) + (b.quantity_vault ?? 0);
         break;
+      case "demand":
+        aValue = ticketSalesCount[a.id] || 0;
+        bValue = ticketSalesCount[b.id] || 0;
+        break;
       default:
         aValue = a.name?.toLowerCase() || "";
         bValue = b.name?.toLowerCase() || "";
@@ -651,19 +672,17 @@ export default function Inventory() {
       return sortOrder === "asc" ? aValue - bValue : bValue - aValue;
     }
     });
-  }, [tabFilteredTickets, sortBy, sortOrder]);
+  }, [tabFilteredTickets, sortBy, sortOrder, ticketSalesCount]);
 
   const hasActiveFilters = 
                            advancedFilters.stockStatus !== "all" || 
                            advancedFilters.priceRange !== "all" ||
-                           advancedFilters.needsOpening !== "all" ||
                            advancedFilters.hasVaultStock !== "all";
 
   const clearAdvancedFilters = () => {
     setAdvancedFilters({
       stockStatus: "all",
       priceRange: "all",
-      needsOpening: "all",
       hasVaultStock: "all",
     });
   };
@@ -745,7 +764,6 @@ export default function Inventory() {
                               counter_packages: "",
                               vault_units: "",
                               vault_packages: "",
-                              is_opened: false,
                               default_quantity_per_package: ticket.default_quantity_per_package?.toString() || "",
                               min_threshold: ticket.min_threshold?.toString() || "10",
                               color: ticket.color || "blue",
@@ -830,6 +848,7 @@ export default function Inventory() {
                 <SelectItem value="quantity_counter">מלאי בדלפק</SelectItem>
                 <SelectItem value="quantity_vault">מלאי בכספת</SelectItem>
                 <SelectItem value="total_quantity">סה&quot;כ מלאי</SelectItem>
+                <SelectItem value="demand">ביקוש (מספר מכירות)</SelectItem>
               </SelectContent>
             </Select>
             <Button
@@ -922,26 +941,6 @@ export default function Inventory() {
 
               <div className="space-y-2">
                 <Label className="flex items-center gap-2">
-                  <AlertTriangle className="h-4 w-4 text-orange-500" />
-                  צריך לפתוח
-                </Label>
-                <Select
-                  value={advancedFilters.needsOpening}
-                  onValueChange={(value) => setAdvancedFilters({ ...advancedFilters, needsOpening: value })}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="הכל" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">הכל</SelectItem>
-                    <SelectItem value="yes">צריך לפתוח</SelectItem>
-                    <SelectItem value="no">לא צריך לפתוח</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div className="space-y-2">
-                <Label className="flex items-center gap-2">
                   <Package className="h-4 w-4 text-indigo-500" />
                   מלאי בכספת
                 </Label>
@@ -987,7 +986,6 @@ export default function Inventory() {
             const quantityVault = ticket.quantity_vault ?? 0;
             const totalQuantity = quantityCounter + quantityVault;
             const isLowStock = quantityCounter <= (ticket.min_threshold || 10);
-            const needsOpening = quantityCounter > 0 && !ticket.is_opened;
             const colorClass = colorOptions.find(c => c.value === ticket.color)?.class || "bg-blue-500";
             
             return (
@@ -1044,7 +1042,6 @@ export default function Inventory() {
                                 packages: "",
                                 destination: "counter",
                                 defaultQuantityPerPackage: ticket.default_quantity_per_package || null,
-                                is_opened: false,
                               });
                               setPackagesDialogOpen(true);
                             }}
@@ -1084,69 +1081,6 @@ export default function Inventory() {
                       )}
                     </div>
 
-                    {/* Needs Opening Indicator */}
-                    {needsOpening && (
-                      <div className="mb-2 p-1.5 bg-orange-100 dark:bg-orange-900/30 rounded border border-orange-300 dark:border-orange-700">
-                        <div className="flex items-center justify-between gap-2">
-                          <div className="flex items-center gap-1.5 text-orange-700 dark:text-orange-300">
-                            <AlertTriangle className="h-3.5 w-3.5" />
-                            <span className="text-xs">צריך לפתוח</span>
-                          </div>
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            className="h-6 px-2 text-xs bg-white dark:bg-gray-800 border-orange-300 dark:border-orange-700 text-orange-700 dark:text-orange-300 hover:bg-orange-200 dark:hover:bg-orange-900/50"
-                            onClick={async () => {
-                              if (!currentKiosk?.id) {
-                                alert('לא ניתן לפתוח כרטיסים ללא קיוסק נבחר');
-                                return;
-                              }
-                              
-                              if (user?.role === 'assistant' && !hasPermission('inventory_edit')) {
-                                alert('אין לך הרשאה לערוך מלאי');
-                                return;
-                              }
-                              
-                              try {
-                                await ticketTypesService.updateTicketType(ticket.id, {
-                                  quantity_counter: ticket.quantity_counter,
-                                  quantity_vault: ticket.quantity_vault,
-                                  is_opened: true,
-                                }, currentKiosk.id);
-                                
-                                // Log to audit
-                                await AuditLog.create({
-                                  action: 'open_tickets',
-                                  entity_type: 'ticketType',
-                                  entity_id: ticket.id,
-                                  entity_name: ticket.name,
-                                  details: {
-                                    ticket_name: ticket.name,
-                                    ticket_id: ticket.id,
-                                    quantity_opened: ticket.quantity_counter,
-                                    message: `נפתחו ${ticket.quantity_counter} כרטיסים מסוג ${ticket.name}`
-                                  },
-                                  user_id: user?.id,
-                                  user_name: user?.full_name || user?.email,
-                                });
-                                
-                                queryClient.invalidateQueries({ queryKey: ['tickets-inventory', currentKiosk?.id] });
-                                queryClient.invalidateQueries({ queryKey: ['tickets-dashboard', currentKiosk?.id] });
-                                queryClient.invalidateQueries({ queryKey: ['tickets-active'] });
-                              } catch (error) {
-                                console.error('Error opening tickets:', error);
-                                alert('שגיאה בפתיחת הכרטיסים: ' + (error.message || 'שגיאה לא ידועה'));
-                              }
-                            }}
-                            disabled={user?.role === 'assistant' && !hasPermission('inventory_edit')}
-                          >
-                            <Check className="h-3 w-3" />
-                            <span className="mr-1">פתח</span>
-                          </Button>
-                        </div>
-                      </div>
-                    )}
-                    
                     {/* Counter Inventory Display - Only counter quantity */}
                     <div className={`flex items-center justify-between p-3 rounded-lg ${
                       isLowStock ? 'bg-amber-900/30' : 'bg-accent'
@@ -1216,7 +1150,6 @@ export default function Inventory() {
                 const quantityVault = ticket.quantity_vault ?? 0;
                 const totalQuantity = quantityCounter + quantityVault;
                 const isLowStock = quantityVault <= (ticket.min_threshold || 10);
-                const needsOpening = quantityCounter > 0 && !ticket.is_opened;
                 const colorClass = colorOptions.find(c => c.value === ticket.color)?.class || "bg-blue-500";
                 
                 return (
@@ -1306,7 +1239,7 @@ export default function Inventory() {
                                 variant="ghost" 
                                 size="icon" 
                                 onClick={() => {
-                                  setTransferFormData({ ticketId: ticket.id, quantity: "", is_opened: false });
+                                  setTransferFormData({ ticketId: ticket.id, quantity: "" });
                                   setTransferDialogOpen(true);
                                 }}
                                 disabled={user?.role === 'assistant' && !hasPermission('inventory_edit')}
@@ -1508,16 +1441,18 @@ export default function Inventory() {
                       </div>
                     </div>
 
-                    <div className="flex items-center gap-2">
-                      <Switch
-                        id="is_opened"
-                        checked={formData.is_opened}
-                        onCheckedChange={(checked) => setFormData({ ...formData, is_opened: checked })}
-                      />
-                      <Label htmlFor="is_opened" className="cursor-pointer">
-                        הכרטיסים בדלפק פתוחים
-                      </Label>
-                    </div>
+                    {/* Alert for opening packages */}
+                    {((formData.counter_packages && parseInt(formData.counter_packages) > 0) || 
+                      (formData.counter_units && parseInt(formData.counter_units) > 0)) && (
+                      <div className="p-4 bg-amber-50 dark:bg-amber-900/30 border-2 border-amber-300 dark:border-amber-700 rounded-lg">
+                        <div className="flex gap-3 items-start">
+                          <AlertTriangle className="h-6 w-6 text-orange-600 dark:text-orange-400 mt-0.5 flex-shrink-0" />
+                          <div className="text-base font-semibold text-orange-800 dark:text-orange-200">
+                            שימו לב! יש לפתוח את החבילה החדשה באלטורה
+                          </div>
+                        </div>
+                      </div>
+                    )}
                   </>
                 );
               }
@@ -1684,27 +1619,7 @@ export default function Inventory() {
                     </div>
                   </div>
 
-                  {(() => {
-                    const counterQty = formData.counter_units ? parseInt(formData.counter_units) : 
-                                      (formData.counter_packages ? (parseInt(formData.counter_packages) || 0) * (parseInt(formData.default_quantity_per_package) || 1) : 0);
-                    return counterQty > 0 && (
-                      <div className="space-y-2">
-                        <div className="flex items-center gap-2">
-                          <input
-                            type="checkbox"
-                            id="is_opened"
-                            checked={formData.is_opened}
-                            onChange={(e) => setFormData({ ...formData, is_opened: e.target.checked })}
-                            className="h-4 w-4"
-                          />
-                          <Label htmlFor="is_opened" className="cursor-pointer">
-                            הכרטיסים בדלפק פתוחים (זמינים למכירה)
-                          </Label>
-                        </div>
-                        <p className="text-xs text-slate-500">אם לא מסומן, הכרטיסים לא יוצגו במערכת המכירה</p>
-                      </div>
-                    );
-                  })()}
+                  {/* is_opened field removed from UI - now internal only */}
 
                   <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-2">
@@ -1899,20 +1814,7 @@ export default function Inventory() {
                         </p>
                       </div>
                       
-                      <div className="space-y-2">
-                        <div className="flex items-center gap-2">
-                          <input
-                            type="checkbox"
-                            id="transfer-opened"
-                            checked={transferFormData.is_opened}
-                            onChange={(e) => setTransferFormData({ ...transferFormData, is_opened: e.target.checked })}
-                            className="h-4 w-4"
-                          />
-                          <Label htmlFor="transfer-opened" className="cursor-pointer">
-                            הכרטיסים פתוחים (זמינים למכירה)
-                          </Label>
-                        </div>
-                      </div>
+                      {/* is_opened checkbox removed from UI - now internal only */}
                       
                       {transferFormData.quantity && (
                         <div className="p-4 bg-amber-50 dark:bg-amber-900/30 border-2 border-amber-300 dark:border-amber-700 rounded-lg">
@@ -1933,7 +1835,7 @@ export default function Inventory() {
           <DialogFooter>
             <Button variant="outline" onClick={() => {
               setTransferDialogOpen(false);
-              setTransferFormData({ ticketId: "", quantity: "", is_opened: false });
+              setTransferFormData({ ticketId: "", quantity: "" });
             }}>
               ביטול
             </Button>
@@ -1970,11 +1872,10 @@ export default function Inventory() {
                     return;
                   }
                   
-                  // Use updateTicketType directly to preserve all values and set is_opened
+                  // Use updateTicketType directly to preserve all values
                   await ticketTypesService.updateTicketType(transferFormData.ticketId, {
                     quantity_counter: currentCounter + quantity,
                     quantity_vault: currentVault - quantity,
-                    is_opened: transferFormData.is_opened,
                   }, currentKiosk.id);
                   
                   // Log to audit
@@ -1989,12 +1890,11 @@ export default function Inventory() {
                       quantity: quantity,
                       from: 'vault',
                       to: 'counter',
-                      is_opened: transferFormData.is_opened,
                       quantity_before_vault: currentVault,
                       quantity_after_vault: currentVault - quantity,
                       quantity_before_counter: currentCounter,
                       quantity_after_counter: currentCounter + quantity,
-                      message: `הועברו ${quantity} כרטיסים מכספת לדלפק${transferFormData.is_opened ? ' ונפתחו' : ''}`
+                      message: `הועברו ${quantity} כרטיסים מכספת לדלפק`
                     },
                     user_id: user?.id,
                     user_name: user?.full_name || user?.email,
@@ -2005,7 +1905,7 @@ export default function Inventory() {
                   queryClient.invalidateQueries({ queryKey: ['tickets-active'] });
                   
                   setTransferDialogOpen(false);
-                  setTransferFormData({ ticketId: "", quantity: "", is_opened: false });
+                  setTransferFormData({ ticketId: "", quantity: "" });
                 } catch (error) {
                   console.error('Error transferring inventory:', error);
                   alert('שגיאה בהעברת המלאי: ' + (error.message || 'שגיאה לא ידועה'));
@@ -2081,32 +1981,14 @@ export default function Inventory() {
                 </div>
                 
                 {packagesFormData.destination === "counter" && (
-                  <>
-                    <div className="space-y-2">
-                      <div className="flex items-center gap-2">
-                        <input
-                          type="checkbox"
-                          id="packages-opened"
-                          checked={packagesFormData.is_opened}
-                          onChange={(e) => setPackagesFormData({ ...packagesFormData, is_opened: e.target.checked })}
-                          className="h-4 w-4"
-                        />
-                        <Label htmlFor="packages-opened" className="cursor-pointer">
-                          הכרטיסים פתוחים (זמינים למכירה)
-                        </Label>
+                  <div className="p-4 bg-amber-50 dark:bg-amber-900/30 border-2 border-amber-300 dark:border-amber-700 rounded-lg">
+                    <div className="flex gap-3 items-start">
+                      <AlertTriangle className="h-6 w-6 text-orange-600 dark:text-orange-400 mt-0.5 flex-shrink-0" />
+                      <div className="text-base font-semibold text-orange-800 dark:text-orange-200">
+                        שימו לב! יש לפתוח את החבילה החדשה באלטורה
                       </div>
                     </div>
-                    {!packagesFormData.is_opened && (
-                      <div className="p-3 bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-800 rounded-lg">
-                        <div className="flex items-start gap-2">
-                          <AlertTriangle className="h-5 w-5 text-orange-600 dark:text-orange-400 mt-0.5 flex-shrink-0" />
-                          <div className="text-sm text-orange-800 dark:text-orange-300">
-                            <strong>חשוב:</strong> לאחר ההוספה, לא לשכוח לפתוח את הכרטיסים כדי שיהיו זמינים למכירה.
-                          </div>
-                        </div>
-                      </div>
-                    )}
-                  </>
+                  </div>
                 )}
               </>
             ) : (
@@ -2121,7 +2003,6 @@ export default function Inventory() {
                       ticketId: value,
                       ticketName: selectedTicket?.name || "",
                       defaultQuantityPerPackage: selectedTicket?.default_quantity_per_package || null,
-                      is_opened: false,
                     });
                   }}
                 >
@@ -2185,20 +2066,16 @@ export default function Inventory() {
                   
                   const currentCounter = selectedTicket.quantity_counter ?? 0;
                   const currentVault = selectedTicket.quantity_vault ?? 0;
-                  const currentIsOpened = selectedTicket.is_opened ?? false;
                   
                   const updateData = {};
                   if (packagesFormData.destination === "counter") {
                     updateData.quantity_counter = currentCounter + quantity;
-                    // Use the checkbox value to determine if tickets are opened
-                    updateData.is_opened = packagesFormData.is_opened;
                     // Preserve vault value
                     updateData.quantity_vault = currentVault;
                   } else {
-                    // When updating vault, preserve counter and is_opened values
+                    // When updating vault, preserve counter value
                     updateData.quantity_counter = currentCounter;
                     updateData.quantity_vault = currentVault + quantity;
-                    updateData.is_opened = currentIsOpened;
                   }
                   
                   await ticketTypesService.updateTicketType(packagesFormData.ticketId, updateData, currentKiosk.id);
@@ -2217,7 +2094,6 @@ export default function Inventory() {
                       destination_name: packagesFormData.destination === "counter" ? "דלפק" : "כספת",
                       packages: packagesFormData.defaultQuantityPerPackage ? inputValue : null,
                       quantity_per_package: packagesFormData.defaultQuantityPerPackage || null,
-                      is_opened: packagesFormData.destination === "counter" ? packagesFormData.is_opened : null,
                       quantity_before_counter: currentCounter,
                       quantity_after_counter: packagesFormData.destination === "counter" ? currentCounter + quantity : currentCounter,
                       quantity_before_vault: currentVault,
@@ -2241,7 +2117,6 @@ export default function Inventory() {
                     packages: "",
                     destination: "counter",
                     defaultQuantityPerPackage: null,
-                    is_opened: false,
                   });
                 } catch (error) {
                   console.error('Error adding packages:', error);
