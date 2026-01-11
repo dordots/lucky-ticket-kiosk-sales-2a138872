@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import { auth, Sale, TicketType, User } from "@/api/entities";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
@@ -58,6 +58,7 @@ export default function Dashboard() {
       return [];
     },
     enabled: !kioskLoading && (!!currentKiosk || user?.role === 'system_manager'),
+    staleTime: 2 * 60 * 1000, // 2 minutes
   });
 
   const { data: tickets = [], isLoading: ticketsLoading } = useQuery({
@@ -71,6 +72,7 @@ export default function Dashboard() {
       return [];
     },
     enabled: !kioskLoading && (!!currentKiosk || user?.role === 'system_manager'),
+    staleTime: 2 * 60 * 1000, // 2 minutes
   });
 
   const { data: users = [] } = useQuery({
@@ -78,30 +80,44 @@ export default function Dashboard() {
     queryFn: () => User.list(),
   });
 
-  // Calculate stats
-  const today = new Date();
-  const todayStart = startOfDay(today);
-  const todayEnd = endOfDay(today);
-  const monthStart = startOfMonth(today);
+  // Calculate stats with useMemo for performance
+  const stats = useMemo(() => {
+    const today = new Date();
+    const todayStart = startOfDay(today);
+    const todayEnd = endOfDay(today);
+    const monthStart = startOfMonth(today);
 
-  const todaySales = sales.filter(sale => {
-    const saleDate = new Date(sale.created_date);
-    return saleDate >= todayStart && saleDate <= todayEnd && sale.status === 'completed';
-  });
+    const todaySales = sales.filter(sale => {
+      const saleDate = new Date(sale.created_date);
+      return saleDate >= todayStart && saleDate <= todayEnd && sale.status === 'completed';
+    });
 
-  const monthSales = sales.filter(sale => {
-    const saleDate = new Date(sale.created_date);
-    return saleDate >= monthStart && sale.status === 'completed';
-  });
+    const monthSales = sales.filter(sale => {
+      const saleDate = new Date(sale.created_date);
+      return saleDate >= monthStart && sale.status === 'completed';
+    });
 
-  const todayRevenue = todaySales.reduce((sum, sale) => sum + (sale.total_amount || 0), 0);
-  const monthRevenue = monthSales.reduce((sum, sale) => sum + (sale.total_amount || 0), 0);
-  const todayTickets = todaySales.reduce((sum, sale) => 
-    sum + (sale.items?.reduce((s, item) => s + item.quantity, 0) || 0), 0
-  );
+    const todayRevenue = todaySales.reduce((sum, sale) => sum + (sale.total_amount || 0), 0);
+    const monthRevenue = monthSales.reduce((sum, sale) => sum + (sale.total_amount || 0), 0);
+    const todayTickets = todaySales.reduce((sum, sale) => 
+      sum + (sale.items?.reduce((s, item) => s + item.quantity, 0) || 0), 0
+    );
 
-  const lowStockCount = tickets.filter(t => t.quantity <= t.min_threshold && t.is_active).length;
-  const activeUsers = users.filter(u => u.is_active !== false).length;
+    const lowStockCount = tickets.filter(t => t.quantity <= t.min_threshold && t.is_active).length;
+    const activeUsers = users.filter(u => u.is_active !== false).length;
+
+    return {
+      todaySales,
+      monthSales,
+      todayRevenue,
+      monthRevenue,
+      todayTickets,
+      lowStockCount,
+      activeUsers,
+    };
+  }, [sales, tickets, users]);
+
+  const { todaySales, monthSales, todayRevenue, monthRevenue, todayTickets, lowStockCount, activeUsers } = stats;
 
   const isOwner = user?.position === 'owner' || user?.role === 'admin';
 

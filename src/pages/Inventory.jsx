@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import { auth, TicketType, AuditLog, Notification } from "@/api/entities";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { generateUniqueCode } from "@/firebase/services/ticketTypes";
@@ -150,6 +150,7 @@ export default function Inventory() {
       }
     },
     enabled: !kioskLoading && !!currentKiosk?.id,
+    staleTime: 2 * 60 * 1000, // 2 minutes
   });
 
   const createMutation = useMutation({
@@ -419,7 +420,8 @@ export default function Inventory() {
   const activeTickets = tickets.filter(t => t.is_active !== false).length;
   const inactiveTickets = tickets.filter(t => t.is_active === false).length;
 
-  const filteredTickets = tickets.filter(t => {
+  const filteredTickets = useMemo(() => {
+    return tickets.filter(t => {
     // Search filter - includes name, code, and nickname
     const searchLower = searchTerm.toLowerCase();
     const matchesSearch = 
@@ -468,10 +470,12 @@ export default function Inventory() {
     }
     
     return true;
-  });
+    });
+  }, [tickets, searchTerm, advancedFilters]);
 
   // Sort filtered tickets
-  const sortedTickets = [...filteredTickets].sort((a, b) => {
+  const sortedTickets = useMemo(() => {
+    return [...filteredTickets].sort((a, b) => {
     let aValue, bValue;
     
     switch (sortBy) {
@@ -507,7 +511,8 @@ export default function Inventory() {
     } else {
       return sortOrder === "asc" ? aValue - bValue : bValue - aValue;
     }
-  });
+    });
+  }, [filteredTickets, sortBy, sortOrder]);
 
   const hasActiveFilters = advancedFilters.status !== "all" || 
                            advancedFilters.stockStatus !== "all" || 
@@ -797,6 +802,9 @@ export default function Inventory() {
                         src={ticket.image_url} 
                         alt={ticket.name}
                         className="w-full h-full object-cover"
+                        loading="lazy"
+                        width="100%"
+                        height="128"
                         onError={(e) => {
                           e.target.style.display = 'none';
                           e.target.parentElement.innerHTML = `<div class="h-2 ${colorClass}"></div>`;

@@ -379,6 +379,9 @@ export default function Onboarding() {
                                   src={ticket.image_url}
                                   alt={ticket.name}
                                   className="w-16 h-16 object-cover rounded-lg"
+                                  loading="lazy"
+                                  width="64"
+                                  height="64"
                                   onError={(e) => {
                                     e.target.style.display = 'none';
                                   }}

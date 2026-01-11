@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import { auth, Sale, TicketType, Notification, AuditLog } from "@/api/entities";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useKiosk } from "@/contexts/KioskContext";
@@ -68,9 +68,11 @@ export default function SellerPOS() {
   const { data: notifications = [] } = useQuery({
     queryKey: ['notifications-unread'],
     queryFn: () => Notification.filter({ is_read: false }),
+    staleTime: 2 * 60 * 1000, // 2 minutes for notifications
   });
 
-  const filteredTickets = tickets.filter(t => {
+  const filteredTickets = useMemo(() => {
+    return tickets.filter(t => {
     // Only show tickets that are available for sale:
     // - quantity_counter > 0 (has stock on counter)
     // - is_opened === true (tickets are opened)
@@ -99,7 +101,8 @@ export default function SellerPOS() {
     }
     
     return true;
-  });
+    });
+  }, [tickets, searchTerm, priceFilter]);
 
   const handleTicketSelect = (ticket) => {
     setSelectedTicket(ticket);
@@ -147,16 +150,16 @@ export default function SellerPOS() {
     setCartItems({});
   };
 
-  const calculateTotal = () => {
+  const calculateTotal = useMemo(() => {
     return Object.values(cartItems).reduce(
       (sum, item) => sum + (item.quantity * item.unitPrice), 
       0
     );
-  };
+  }, [cartItems]);
 
-  const getItemsCount = () => {
+  const getItemsCount = useMemo(() => {
     return Object.values(cartItems).reduce((sum, item) => sum + item.quantity, 0);
-  };
+  }, [cartItems]);
 
   const handleConfirmSale = async (paymentMethod, notes) => {
     setIsProcessing(true);
@@ -180,7 +183,7 @@ export default function SellerPOS() {
         seller_id: user?.id,
         seller_name: user?.full_name || user?.email,
         items,
-        total_amount: calculateTotal(),
+        total_amount: calculateTotal,
         payment_method: paymentMethod,
         notes,
         status: "completed",
@@ -265,7 +268,7 @@ export default function SellerPOS() {
           actor_name: user?.full_name || user?.email,
           target_id: sale.id,
           target_type: "Sale",
-          details: { items, total: calculateTotal(), payment_method: paymentMethod },
+          details: { items, total: calculateTotal, payment_method: paymentMethod },
           kiosk_id: currentKiosk?.id,
         });
       } catch (auditError) {
@@ -411,9 +414,9 @@ export default function SellerPOS() {
         <div className="hidden lg:block w-96 bg-card border-r border-border p-6">
           <div className="flex items-center justify-between mb-6">
             <h2 className="text-xl font-bold text-foreground">עגלת קניות</h2>
-            {getItemsCount() > 0 && (
+            {getItemsCount > 0 && (
               <Badge variant="secondary" className="text-primary bg-primary/10">
-                {getItemsCount()} פריטים
+                {getItemsCount} פריטים
               </Badge>
             )}
           </div>
@@ -430,26 +433,26 @@ export default function SellerPOS() {
           </div>
 
           {/* Confirm Button */}
-          {getItemsCount() > 0 && (
+          {getItemsCount > 0 && (
             <Button
               onClick={() => setPaymentOpen(true)}
               className="w-full h-14 text-lg bg-theme-gradient hover:opacity-90 shadow-lg transition-opacity"
             >
               <Check className="h-5 w-5 ml-2" />
-              אשר מכירה - ₪{calculateTotal().toFixed(2)}
+              אשר מכירה - ₪{calculateTotal.toFixed(2)}
             </Button>
           )}
         </div>
 
         {/* Cart Section - Mobile */}
-        {getItemsCount() > 0 && (
+        {getItemsCount > 0 && (
           <div className="lg:hidden fixed bottom-0 left-0 right-0 bg-card border-t border-border p-4 shadow-lg">
             <Button
               onClick={() => setPaymentOpen(true)}
               className="w-full h-14 text-lg bg-theme-gradient"
             >
               <ShoppingCart className="h-5 w-5 ml-2" />
-              {getItemsCount()} פריטים - ₪{calculateTotal().toFixed(2)}
+              {getItemsCount} פריטים - ₪{calculateTotal.toFixed(2)}
             </Button>
           </div>
         )}
@@ -469,8 +472,8 @@ export default function SellerPOS() {
         open={paymentOpen}
         onClose={() => setPaymentOpen(false)}
         onConfirm={handleConfirmSale}
-        total={calculateTotal()}
-        itemsCount={getItemsCount()}
+        total={calculateTotal}
+        itemsCount={getItemsCount}
         isProcessing={isProcessing}
       />
     </div>

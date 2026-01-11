@@ -1,4 +1,4 @@
-import React from "react";
+import React, { memo } from "react";
 import { motion } from "framer-motion";
 import { Package, AlertTriangle } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
@@ -14,7 +14,7 @@ const colorMap = {
   yellow: "from-yellow-400 to-yellow-600",
 };
 
-export default function TicketGrid({ tickets, onSelect, selectedItems }) {
+function TicketGrid({ tickets, onSelect, selectedItems }) {
   return (
     <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
       {tickets.map((ticket, index) => {
@@ -48,6 +48,9 @@ export default function TicketGrid({ tickets, onSelect, selectedItems }) {
                   src={ticket.image_url} 
                   alt={ticket.name}
                   className="w-full h-full object-cover"
+                  loading="lazy"
+                  width="100%"
+                  height="128"
                   onError={(e) => {
                     e.target.style.display = 'none';
                     e.target.parentElement.innerHTML = `
@@ -115,3 +118,5 @@ export default function TicketGrid({ tickets, onSelect, selectedItems }) {
     </div>
   );
 }
+
+export default memo(TicketGrid);
