@@ -116,7 +116,6 @@ export default function Inventory() {
     image_url: "",
     use_image: false,
     is_active: true,
-    ticket_category: "custom",
   });
   const [transferDialogOpen, setTransferDialogOpen] = useState(false);
   const [transferFormData, setTransferFormData] = useState({
@@ -313,7 +312,6 @@ export default function Inventory() {
       image_url: "",
       use_image: false,
       is_active: true,
-      ticket_category: "custom",
     });
     setSelectedTicket(null);
   };
@@ -454,7 +452,7 @@ export default function Inventory() {
     if (!selectedTicket) {
       // New ticket - generate unique code
       try {
-        code = await generateUniqueCode(formData.ticket_category || "custom", currentKiosk?.id);
+        code = await generateUniqueCode("custom", currentKiosk?.id);
       } catch (error) {
         console.error("Error generating code:", error);
         alert("שגיאה ביצירת קוד. נסה שוב.");
@@ -852,7 +850,6 @@ export default function Inventory() {
                               image_url: ticket.image_url || "",
                               use_image: !!ticket.image_url,
                               is_active: ticket.is_active !== false,
-                              ticket_category: ticket.ticket_category || "custom",
                             });
                             setAddTicketOpen(false);
                             setAddTicketSearch("");
