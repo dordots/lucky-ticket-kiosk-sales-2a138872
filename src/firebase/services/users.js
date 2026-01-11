@@ -194,4 +194,3 @@ export const canAccessKiosk = (user, kioskId) => {
   
   return false;
 };
-

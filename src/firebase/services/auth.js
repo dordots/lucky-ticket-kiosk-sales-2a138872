@@ -345,4 +345,3 @@ export const signInWithGoogle = async () => {
     throw error;
   }
 };
-
