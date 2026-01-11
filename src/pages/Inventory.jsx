@@ -1914,12 +1914,12 @@ export default function Inventory() {
                         </div>
                       </div>
                       
-                      {!transferFormData.is_opened && (
-                        <div className="p-3 bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-800 rounded-lg">
-                          <div className="flex items-start gap-2">
-                            <AlertTriangle className="h-5 w-5 text-orange-600 dark:text-orange-400 mt-0.5 flex-shrink-0" />
-                            <div className="text-sm text-orange-800 dark:text-orange-300">
-                              <strong>חשוב:</strong> לאחר ההעברה, לא לשכוח לפתוח את הכרטיסים כדי שיהיו זמינים למכירה.
+                      {transferFormData.quantity && (
+                        <div className="p-4 bg-amber-50 dark:bg-amber-900/30 border-2 border-amber-300 dark:border-amber-700 rounded-lg">
+                          <div className="flex gap-3 items-start">
+                            <AlertTriangle className="h-6 w-6 text-orange-600 dark:text-orange-400 mt-0.5 flex-shrink-0" />
+                            <div className="text-base font-semibold text-orange-800 dark:text-orange-200">
+                              שימו לב! יש לפתוח את החבילה החדשה באלטורה
                             </div>
                           </div>
                         </div>
