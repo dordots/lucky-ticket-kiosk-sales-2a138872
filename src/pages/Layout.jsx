@@ -281,7 +281,7 @@ export default function Layout({ children, currentPageName }) {
           <Button variant="ghost" size="icon" onClick={() => setSidebarOpen(true)}>
             <Menu className="h-6 w-6" />
           </Button>
-          <h1 className="text-lg font-bold text-foreground">כרטיסי מזל</h1>
+          <h1 className="text-lg font-bold text-foreground">Nobee</h1>
           {!isSeller && (
             <div className="flex items-center gap-2">
               <Link to={createPageUrl("Notifications")}>
@@ -323,7 +323,7 @@ export default function Layout({ children, currentPageName }) {
                   <ShoppingCart className="h-5 w-5 text-white" />
                 </div>
                 <div className="flex-1 min-w-0">
-                  <h1 className="text-xl font-bold text-foreground">כרטיסי מזל</h1>
+                  <h1 className="text-xl font-bold text-foreground">Nobee</h1>
                   <p className="text-xs text-muted-foreground">ניהול מכירות</p>
                   {/* Show kiosk label only for non-system-manager roles */}
                   {currentKiosk && !kioskLoading && user?.role !== 'system_manager' && (

@@ -90,7 +90,7 @@ export default function Login() {
               <ShoppingCart className="h-8 w-8 text-white" />
             </div>
             <div>
-              <CardTitle className="text-2xl font-bold text-foreground">כרטיסי מזל</CardTitle>
+              <CardTitle className="text-2xl font-bold text-foreground">Nobee</CardTitle>
               <CardDescription className="mt-2">התחבר למערכת ניהול המכירות</CardDescription>
             </div>
           </CardHeader>

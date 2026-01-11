@@ -19,7 +19,8 @@ import {
   XCircle,
   ArrowUpDown,
   ArrowUp,
-  ArrowDown
+  ArrowDown,
+  Eye
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -130,7 +131,10 @@ export default function Inventory() {
     packages: "", // For package input (mutually exclusive with units)
     destination: "counter", // "counter" or "vault" - set based on activeTab
     defaultQuantityPerPackage: null,
+    min_threshold: "10", // Required when adding ticket to inventory
   });
+  const [viewDialogOpen, setViewDialogOpen] = useState(false);
+  const [viewTicket, setViewTicket] = useState(null);
   const [sortBy, setSortBy] = useState("name"); // name, price, quantity_counter, quantity_vault, total_quantity, demand
   const [sortOrder, setSortOrder] = useState("asc"); // asc, desc
   const [advancedFilters, setAdvancedFilters] = useState({
@@ -323,22 +327,22 @@ export default function Inventory() {
       if (!canEdit) return;
     }
     setSelectedTicket(ticket);
+    // Only load the fields needed for editing
     setFormData({
       name: ticket.name,
-      nickname: ticket.nickname || "",
-      price: ticket.price?.toString() || "",
-      code: ticket.code || "", // Keep existing code (readonly)
-      counter_units: ticket.quantity_counter?.toString() || "0",
+      nickname: "",
+      price: "",
+      code: "",
+      counter_units: "",
       counter_packages: "",
-      vault_units: ticket.quantity_vault?.toString() || "0",
+      vault_units: "",
       vault_packages: "",
       default_quantity_per_package: ticket.default_quantity_per_package?.toString() || "",
       min_threshold: ticket.min_threshold?.toString() || "10",
-      color: ticket.color || "blue",
-      image_url: ticket.image_url || "",
-      use_image: !!ticket.image_url,
-      is_active: ticket.is_active !== false,
-      ticket_category: ticket.ticket_category || "custom",
+      color: "blue",
+      image_url: "",
+      use_image: false,
+      is_active: true,
     });
     setDialogOpen(true);
   };
@@ -379,6 +383,13 @@ export default function Inventory() {
     
     // If ticket exists in system but not in inventory, just add inventory
     if (selectedTicket && !ticketInInventory) {
+      // Adding existing ticket to inventory - validate min_threshold
+      const minThresholdValue = parseInt(formData.min_threshold) || 0;
+      if (!formData.min_threshold || minThresholdValue <= 0) {
+        alert('נא להזין סף התראה תקין (מספר גדול מ-0)');
+        return;
+      }
+
       // Adding existing ticket to inventory - only update quantities
       // Calculate quantities from units or packages
       const defaultQtyPerPackage = selectedTicket.default_quantity_per_package || 1;
@@ -419,6 +430,7 @@ export default function Inventory() {
       await TicketType.update(selectedTicket.id, {
         quantity_counter,
         quantity_vault,
+        min_threshold: minThresholdValue,
       }, currentKiosk.id);
 
       // Create audit log
@@ -445,6 +457,15 @@ export default function Inventory() {
       setDialogOpen(false);
       resetForm();
       return;
+    }
+
+    // Validate min_threshold for new tickets
+    if (!selectedTicket) {
+      const minThresholdValue = parseInt(formData.min_threshold) || 0;
+      if (!formData.min_threshold || minThresholdValue <= 0) {
+        alert('נא להזין סף התראה תקין (מספר גדול מ-0)');
+        return;
+      }
     }
 
     // Generate code automatically for new tickets
@@ -507,77 +528,17 @@ export default function Inventory() {
         color: formData.use_image ? null : formData.color,
         image_url: formData.use_image ? formData.image_url : null,
         is_active: formData.is_active,
-        ticket_category: formData.ticket_category || "custom",
+        ticket_category: "custom", // Always use "custom" as default
       kiosk_id: currentKiosk.id,
     };
 
     if (selectedTicket) {
-      const oldQuantityCounter = selectedTicket.quantity_counter ?? 0;
-      const newQuantityCounter = data.quantity_counter;
+      // For editing existing ticket, only update min_threshold
+      const updateData = {
+        min_threshold: parseInt(formData.min_threshold) || 10,
+      };
       
-      await updateMutation.mutateAsync({ id: selectedTicket.id, data });
-      
-      // Handle stock notifications (based on quantity_counter only)
-      try {
-        // If stock improved (went above threshold), mark existing notifications as read
-        if (oldQuantityCounter <= data.min_threshold && newQuantityCounter > data.min_threshold) {
-          const existingNotifs = await Notification.filter({
-            ticket_type_id: selectedTicket.id,
-            is_read: false,
-          });
-          
-          for (const notif of existingNotifs) {
-            if (notif.notification_type === 'low_stock' || notif.notification_type === 'out_of_stock') {
-              await Notification.update(notif.id, { is_read: true });
-            }
-          }
-          queryClient.invalidateQueries({ queryKey: ['notifications-all'] });
-          queryClient.invalidateQueries({ queryKey: ['notifications-unread'] });
-        }
-        
-        // Check for out of stock notification (quantity_counter = 0)
-        if (newQuantityCounter === 0 && oldQuantityCounter > 0) {
-          const existingOutOfStockNotifs = await Notification.filter({
-            ticket_type_id: selectedTicket.id,
-            is_read: false,
-            notification_type: "out_of_stock",
-          });
-          
-          if (existingOutOfStockNotifs.length === 0) {
-            await Notification.create({
-              ticket_type_id: selectedTicket.id,
-              ticket_name: data.name,
-              current_quantity: 0,
-              threshold: data.min_threshold,
-              notification_type: "out_of_stock",
-            });
-            queryClient.invalidateQueries({ queryKey: ['notifications-all'] });
-            queryClient.invalidateQueries({ queryKey: ['notifications-unread'] });
-          }
-        }
-        // Check for low stock notification (quantity_counter > 0 but <= threshold)
-        else if (newQuantityCounter > 0 && newQuantityCounter <= data.min_threshold && (oldQuantityCounter > data.min_threshold || oldQuantityCounter === 0)) {
-          const existingLowStockNotifs = await Notification.filter({
-            ticket_type_id: selectedTicket.id,
-            is_read: false,
-            notification_type: "low_stock",
-          });
-          
-          if (existingLowStockNotifs.length === 0) {
-            await Notification.create({
-              ticket_type_id: selectedTicket.id,
-              ticket_name: data.name,
-              current_quantity: newQuantityCounter,
-              threshold: data.min_threshold,
-              notification_type: "low_stock",
-            });
-            queryClient.invalidateQueries({ queryKey: ['notifications-all'] });
-            queryClient.invalidateQueries({ queryKey: ['notifications-unread'] });
-          }
-        }
-      } catch (notificationError) {
-        console.error("Error handling stock notifications:", notificationError);
-      }
+      await updateMutation.mutateAsync({ id: selectedTicket.id, data: updateData });
       
       // Create audit log
       try {
@@ -587,7 +548,12 @@ export default function Inventory() {
           actor_name: user?.full_name || user?.email,
           target_id: selectedTicket.id,
           target_type: "TicketType",
-          details: { previous: selectedTicket, updated: data },
+          details: {
+            ticket_name: selectedTicket.name,
+            ticket_id: selectedTicket.id,
+            min_threshold: updateData.min_threshold,
+            message: `עודכן כרטיס: סף התראה: ${updateData.min_threshold}`
+          },
           kiosk_id: currentKiosk?.id,
         });
       } catch (auditError) {
@@ -1114,49 +1080,6 @@ export default function Inventory() {
                         </div>
                         <p className="text-sm text-muted-foreground">{ticket.code}</p>
                       </div>
-                      <div className="flex flex-col gap-1">
-                        <div className="flex gap-1">
-                          <Button 
-                            variant="ghost" 
-                            size="icon" 
-                            onClick={() => {
-                              setPackagesFormData({
-                                ticketId: ticket.id,
-                                ticketName: ticket.name,
-                                units: "",
-                                packages: "",
-                                destination: activeTab, // Set based on active tab
-                                defaultQuantityPerPackage: ticket.default_quantity_per_package || null,
-                              });
-                              setPackagesDialogOpen(true);
-                            }}
-                            disabled={user?.role === 'assistant' && !(activeTab === 'counter' ? canAddStockCounter : canAddStockVault)}
-                            title={ticket.default_quantity_per_package ? "עדכן מלאי לפי חבילות" : "עדכן מלאי"}
-                            className={ticket.default_quantity_per_package ? "text-green-600" : ""}
-                          >
-                            <Plus className="h-4 w-4" />
-                          </Button>
-                          {/* Transfer button only in vault tab - removed from counter tab */}
-                        </div>
-                        <div className="flex gap-1">
-                          <Button 
-                            variant="ghost" 
-                            size="icon" 
-                            onClick={() => handleEdit(ticket)}
-                            disabled={user?.role === 'assistant' && !(activeTab === 'counter' ? canEditCounter : canEditVault)}
-                          >
-                            <Edit className="h-4 w-4 text-muted-foreground" />
-                          </Button>
-                          <Button 
-                            variant="ghost" 
-                            size="icon" 
-                            onClick={() => handleDelete(ticket)}
-                            disabled={user?.role === 'assistant' && !canDelete}
-                          >
-                            <Trash2 className="h-4 w-4 text-red-400" />
-                          </Button>
-                        </div>
-                      </div>
                     </div>
 
                     <div className="flex items-center justify-between mb-3">
@@ -1192,6 +1115,64 @@ export default function Inventory() {
                             {ticket.default_quantity_per_package} כרטיסים בחבילה
                           </span>
                         )}
+                      </div>
+                    </div>
+
+                    {/* Actions */}
+                    <div className="flex items-center justify-between gap-2 mt-3">
+                      <div className="flex gap-1">
+                        <Button 
+                          variant="ghost" 
+                          size="icon" 
+                          onClick={() => {
+                            setPackagesFormData({
+                              ticketId: ticket.id,
+                              ticketName: ticket.name,
+                              units: "",
+                              packages: "",
+                              destination: activeTab, // Set based on active tab
+                              defaultQuantityPerPackage: ticket.default_quantity_per_package || null,
+                              min_threshold: ticket.min_threshold?.toString() || "10",
+                            });
+                            setPackagesDialogOpen(true);
+                          }}
+                          disabled={user?.role === 'assistant' && !(activeTab === 'counter' ? canAddStockCounter : canAddStockVault)}
+                          title={ticket.default_quantity_per_package ? "עדכן מלאי לפי חבילות" : "עדכן מלאי"}
+                          className={ticket.default_quantity_per_package ? "text-green-600" : ""}
+                        >
+                          <Plus className="h-4 w-4" />
+                        </Button>
+                      </div>
+                      <div className="flex gap-1">
+                        <Button 
+                          variant="ghost" 
+                          size="icon" 
+                          onClick={() => {
+                            setViewTicket(ticket);
+                            setViewDialogOpen(true);
+                          }}
+                          title="צפייה בכרטיס"
+                        >
+                          <Eye className="h-4 w-4 text-muted-foreground" />
+                        </Button>
+                        <Button 
+                          variant="ghost" 
+                          size="icon" 
+                          onClick={() => handleEdit(ticket)}
+                          disabled={user?.role === 'assistant' && !(activeTab === 'counter' ? canEditCounter : canEditVault)}
+                          title="עריכת כרטיס"
+                        >
+                          <Edit className="h-4 w-4 text-muted-foreground" />
+                        </Button>
+                        <Button 
+                          variant="ghost" 
+                          size="icon" 
+                          onClick={() => handleDelete(ticket)}
+                          disabled={user?.role === 'assistant' && !canDelete}
+                          title="מחיקת כרטיס"
+                        >
+                          <Trash2 className="h-4 w-4 text-red-400" />
+                        </Button>
                       </div>
                     </div>
                   </CardContent>
@@ -1332,6 +1313,7 @@ export default function Inventory() {
                                   packages: "",
                                   destination: activeTab, // Set based on active tab
                                   defaultQuantityPerPackage: ticket.default_quantity_per_package || null,
+                                  min_threshold: ticket.min_threshold?.toString() || "10",
                                 });
                                 setPackagesDialogOpen(true);
                               }}
@@ -1360,8 +1342,20 @@ export default function Inventory() {
                             <Button 
                               variant="ghost" 
                               size="icon" 
+                              onClick={() => {
+                                setViewTicket(ticket);
+                                setViewDialogOpen(true);
+                              }}
+                              title="צפייה בכרטיס"
+                            >
+                              <Eye className="h-4 w-4 text-muted-foreground" />
+                            </Button>
+                            <Button 
+                              variant="ghost" 
+                              size="icon" 
                               onClick={() => handleEdit(ticket)}
                               disabled={user?.role === 'assistant' && !(activeTab === 'counter' ? canEditCounter : canEditVault)}
+                              title="עריכת כרטיס"
                             >
                               <Edit className="h-4 w-4 text-muted-foreground" />
                             </Button>
@@ -1370,6 +1364,7 @@ export default function Inventory() {
                               size="icon" 
                               onClick={() => handleDelete(ticket)}
                               disabled={user?.role === 'assistant' && !canDelete}
+                              title="מחיקת כרטיס"
                             >
                               <Trash2 className="h-4 w-4 text-red-400" />
                             </Button>
@@ -1558,6 +1553,19 @@ export default function Inventory() {
                       </div>
                     </div>
 
+                    <div className="space-y-2">
+                      <Label>סף התראה <span className="text-red-500">*</span></Label>
+                      <Input
+                        type="number"
+                        value={formData.min_threshold}
+                        onChange={(e) => setFormData({ ...formData, min_threshold: e.target.value })}
+                        placeholder="10"
+                        min="1"
+                        required
+                      />
+                      <p className="text-xs text-slate-500">חובה להזין סף התראה</p>
+                    </div>
+
                     {/* Alert for opening packages */}
                     {((formData.counter_packages && parseInt(formData.counter_packages) > 0) || 
                       (formData.counter_units && parseInt(formData.counter_units) > 0)) && (
@@ -1574,7 +1582,35 @@ export default function Inventory() {
                 );
               }
               
-              // Full form for new ticket or editing existing ticket in inventory
+              // Edit form - only for existing tickets in inventory (minimal fields)
+              if (selectedTicket) {
+                return (
+                  <>
+                    <div className="space-y-2">
+                      <Label>שם הכרטיס</Label>
+                      <Input
+                        value={selectedTicket.name}
+                        readOnly
+                        disabled
+                        className="bg-accent cursor-not-allowed"
+                      />
+                      <p className="text-xs text-slate-500">שם הכרטיס לא ניתן לשינוי</p>
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label>סף התראה</Label>
+                      <Input
+                        type="number"
+                        value={formData.min_threshold}
+                        onChange={(e) => setFormData({ ...formData, min_threshold: e.target.value })}
+                        placeholder="10"
+                      />
+                    </div>
+                  </>
+                );
+              }
+              
+              // Full form for new ticket (keep existing form)
               return (
                 <>
                   <div className="space-y-2">
@@ -1604,29 +1640,18 @@ export default function Inventory() {
                         value={formData.price}
                         onChange={(e) => setFormData({ ...formData, price: e.target.value })}
                         placeholder="10"
-                        readOnly={!!selectedTicket}
-                        disabled={!!selectedTicket}
-                        className={selectedTicket ? "bg-accent cursor-not-allowed" : ""}
                       />
-                      {selectedTicket && (
-                        <p className="text-xs text-slate-500">מחיר לא ניתן לשינוי</p>
-                      )}
                     </div>
                     <div className="space-y-2">
                       <Label>קוד</Label>
                       <Input
-                        value={formData.code || (selectedTicket ? selectedTicket.code : "")}
+                        value={formData.code || ""}
                         readOnly
                         disabled
-                        placeholder={selectedTicket ? "קוד קיים" : "ייווצר אוטומטית"}
+                        placeholder="ייווצר אוטומטית"
                         className="bg-accent cursor-not-allowed"
                       />
-                      {!selectedTicket && (
-                        <p className="text-xs text-slate-500">הקוד ייווצר אוטומטית בעת שמירה</p>
-                      )}
-                      {selectedTicket && (
-                        <p className="text-xs text-slate-500">קוד לא ניתן לשינוי</p>
-                      )}
+                      <p className="text-xs text-slate-500">הקוד ייווצר אוטומטית בעת שמירה</p>
                     </div>
                   </div>
 
@@ -1736,8 +1761,6 @@ export default function Inventory() {
                     </div>
                   </div>
 
-                  {/* is_opened field removed from UI - now internal only */}
-
                   <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-2">
                       <Label>כמות יחידות בחבילה</Label>
@@ -1750,13 +1773,16 @@ export default function Inventory() {
                       <p className="text-xs text-slate-500">כמות יחידות בחבילה חדשה (אופציונלי)</p>
                     </div>
                     <div className="space-y-2">
-                      <Label>סף התראה</Label>
+                      <Label>סף התראה <span className="text-red-500">*</span></Label>
                       <Input
                         type="number"
                         value={formData.min_threshold}
                         onChange={(e) => setFormData({ ...formData, min_threshold: e.target.value })}
                         placeholder="10"
+                        min="1"
+                        required
                       />
+                      <p className="text-xs text-slate-500">חובה להזין סף התראה</p>
                     </div>
                   </div>
 
@@ -1858,11 +1884,23 @@ export default function Inventory() {
               disabled={(() => {
                 const ticketInInventory = selectedTicket ? tickets.find(t => t.id === selectedTicket.id) : null;
                 const isAddingExistingTicket = selectedTicket && !ticketInInventory;
-                if (isAddingExistingTicket) {
-                  // For adding existing ticket, only need quantities
-                  return false;
+                const isEditingTicket = selectedTicket && ticketInInventory;
+                
+                if (isEditingTicket) {
+                  // For editing existing ticket, only need min_threshold
+                  const minThresholdValue = parseInt(formData.min_threshold) || 0;
+                  return !formData.min_threshold || minThresholdValue <= 0;
                 }
-                return !formData.name || !formData.price;
+                
+                if (isAddingExistingTicket) {
+                  // For adding existing ticket, need quantities and min_threshold
+                  const minThresholdValue = parseInt(formData.min_threshold) || 0;
+                  return !formData.min_threshold || minThresholdValue <= 0;
+                }
+                
+                // For new ticket, need name, price, and min_threshold
+                const minThresholdValue = parseInt(formData.min_threshold) || 0;
+                return !formData.name || !formData.price || !formData.min_threshold || minThresholdValue <= 0;
               })()}
               className="bg-theme-gradient"
             >
@@ -2147,6 +2185,7 @@ export default function Inventory() {
                       units: "",
                       packages: "",
                       defaultQuantityPerPackage: selectedTicket?.default_quantity_per_package || null,
+                      min_threshold: selectedTicket?.min_threshold?.toString() || "10",
                     });
                   }}
                 >
@@ -2175,6 +2214,7 @@ export default function Inventory() {
                 packages: "",
                 destination: "counter",
                 defaultQuantityPerPackage: null,
+                min_threshold: "10",
               });
             }}>
               ביטול
@@ -2271,6 +2311,9 @@ export default function Inventory() {
                     updateData.quantity_vault = currentVault + quantity;
                   }
                   
+                  // Always update min_threshold when adding inventory
+                  updateData.min_threshold = parseInt(packagesFormData.min_threshold) || 10;
+                  
                   await ticketTypesService.updateTicketType(packagesFormData.ticketId, updateData, currentKiosk.id);
                   
                   // Log to audit
@@ -2312,6 +2355,7 @@ export default function Inventory() {
                     packages: "",
                     destination: "counter",
                     defaultQuantityPerPackage: null,
+                    min_threshold: "10",
                   });
                 } catch (error) {
                   console.error('Error adding packages:', error);
@@ -2326,6 +2370,103 @@ export default function Inventory() {
               className="bg-theme-gradient"
             >
               הוסף
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* View Ticket Dialog */}
+      <Dialog open={viewDialogOpen} onOpenChange={setViewDialogOpen}>
+        <DialogContent className="sm:max-w-2xl max-h-[90vh] flex flex-col" dir="rtl">
+          <DialogHeader className="flex-shrink-0">
+            <DialogTitle>צפייה בכרטיס</DialogTitle>
+          </DialogHeader>
+          
+          {viewTicket && (
+            <div className="space-y-6 py-4 overflow-y-auto flex-1 min-h-0">
+              {/* Ticket Image or Color */}
+              {viewTicket.image_url ? (
+                <div className="w-full h-48 rounded-lg overflow-hidden">
+                  <img 
+                    src={viewTicket.image_url} 
+                    alt={viewTicket.name}
+                    className="w-full h-full object-cover"
+                    loading="lazy"
+                  />
+                </div>
+              ) : (
+                <div className={`w-full h-32 rounded-lg bg-gradient-to-br ${
+                  colorOptions.find(c => c.value === viewTicket.color)?.class || "bg-blue-500"
+                } flex items-center justify-center`}>
+                  <span className="text-4xl font-bold text-white/90">
+                    {viewTicket.code || viewTicket.name.charAt(0)}
+                  </span>
+                </div>
+              )}
+
+              {/* Basic Info */}
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label className="text-muted-foreground">שם הכרטיס</Label>
+                  <p className="font-semibold text-foreground">{viewTicket.name}</p>
+                </div>
+                {viewTicket.nickname && (
+                  <div className="space-y-2">
+                    <Label className="text-muted-foreground">כינוי</Label>
+                    <p className="text-foreground">"{viewTicket.nickname}"</p>
+                  </div>
+                )}
+                <div className="space-y-2">
+                  <Label className="text-muted-foreground">מחיר</Label>
+                  <p className="font-semibold text-primary text-xl">₪{viewTicket.price}</p>
+                </div>
+                <div className="space-y-2">
+                  <Label className="text-muted-foreground">קוד</Label>
+                  <p className="text-foreground font-mono">{viewTicket.code}</p>
+                </div>
+              </div>
+
+              {/* Inventory Info */}
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-3 p-4 border rounded-lg">
+                  <Label className="text-base font-semibold">דלפק</Label>
+                  <div className="space-y-1">
+                    <p className="text-2xl font-bold text-foreground">
+                      {viewTicket.quantity_counter ?? 0}
+                    </p>
+                    <p className="text-sm text-muted-foreground">יחידות</p>
+                  </div>
+                </div>
+                <div className="space-y-3 p-4 border rounded-lg">
+                  <Label className="text-base font-semibold">כספת</Label>
+                  <div className="space-y-1">
+                    <p className="text-2xl font-bold text-foreground">
+                      {viewTicket.quantity_vault ?? 0}
+                    </p>
+                    <p className="text-sm text-muted-foreground">יחידות</p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Settings */}
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label className="text-muted-foreground">כמות יחידות בחבילה</Label>
+                  <p className="text-foreground">
+                    {viewTicket.default_quantity_per_package || "לא מוגדר"}
+                  </p>
+                </div>
+                <div className="space-y-2">
+                  <Label className="text-muted-foreground">סף התראה</Label>
+                  <p className="text-foreground">{viewTicket.min_threshold || 10}</p>
+                </div>
+              </div>
+            </div>
+          )}
+
+          <DialogFooter className="flex-shrink-0">
+            <Button variant="outline" onClick={() => setViewDialogOpen(false)}>
+              סגור
             </Button>
           </DialogFooter>
         </DialogContent>

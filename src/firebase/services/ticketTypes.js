@@ -74,6 +74,23 @@ export const normalizeTicketType = (ticketData, kioskId = null) => {
   // Calculate total quantity (for backward compatibility)
   normalized.quantity = normalized.quantity_counter + normalized.quantity_vault;
   
+  // Extract kiosk-specific min_threshold from map (default_quantity_per_package remains global)
+  if (kioskId) {
+    const minThresholdMap = normalized.min_threshold_map || {};
+    
+    // Get kiosk-specific min_threshold, or fallback to old global value, or default
+    normalized.min_threshold = minThresholdMap[kioskId] !== undefined 
+      ? minThresholdMap[kioskId] 
+      : (normalized.min_threshold !== undefined ? normalized.min_threshold : 10);
+  } else {
+    // If no kiosk specified, use old global value or default
+    normalized.min_threshold = normalized.min_threshold !== undefined 
+      ? normalized.min_threshold 
+      : 10;
+  }
+  
+  // default_quantity_per_package remains global (no map needed)
+  
   // is_opened field removed - no longer used
   
   return normalized;
@@ -198,14 +215,27 @@ export const createTicketType = async (ticketTypeData) => {
     const ticketTypesRef = collection(db, COLLECTION_NAME);
     
     // Extract kiosk-specific data if provided
-    const { kiosk_id, quantity_counter, quantity_vault, ...ticketData } = ticketTypeData;
+    const { 
+      kiosk_id, 
+      quantity_counter, 
+      quantity_vault, 
+      default_quantity_per_package,
+      min_threshold,
+      ...ticketData 
+    } = ticketTypeData;
     
-    // Initialize amount map
+    // Initialize maps
     const amount = {};
+    const minThresholdMap = {};
     
     // If kiosk_id and quantities provided, add to amount map
     if (kiosk_id && (quantity_counter !== undefined || quantity_vault !== undefined)) {
       amount[kiosk_id] = formatAmount(quantity_counter || 0, quantity_vault || 0);
+    }
+    
+    // If kiosk_id and min_threshold provided, add to min_threshold map
+    if (kiosk_id && min_threshold !== undefined && min_threshold !== null) {
+      minThresholdMap[kiosk_id] = min_threshold;
     }
     
     const newTicketType = {
@@ -214,6 +244,16 @@ export const createTicketType = async (ticketTypeData) => {
       created_date: Timestamp.now(),
       updated_date: Timestamp.now()
     };
+    
+    // Add default_quantity_per_package as global field (not in map)
+    if (default_quantity_per_package !== undefined && default_quantity_per_package !== null) {
+      newTicketType.default_quantity_per_package = default_quantity_per_package;
+    }
+    
+    // Only add min_threshold_map if it has values
+    if (Object.keys(minThresholdMap).length > 0) {
+      newTicketType.min_threshold_map = minThresholdMap;
+    }
     
     const docRef = await addDoc(ticketTypesRef, newTicketType);
     return normalizeTicketType({
@@ -239,11 +279,18 @@ export const updateTicketType = async (ticketTypeId, updateData, kioskId = null)
     
     const ticketData = ticketTypeSnap.data();
     
-    // Get current amount map from raw data
+    // Get current maps from raw data
     const amount = ticketData.amount || {};
+    const minThresholdMap = ticketData.min_threshold_map || {};
     
     // Extract kiosk-specific updates
-    const { quantity_counter, quantity_vault, ...globalUpdates } = updateData;
+    const { 
+      quantity_counter, 
+      quantity_vault, 
+      default_quantity_per_package, 
+      min_threshold,
+      ...globalUpdates 
+    } = updateData;
     
     // If kioskId and quantities provided, update amount map
     if (kioskId && (quantity_counter !== undefined || quantity_vault !== undefined)) {
@@ -256,12 +303,27 @@ export const updateTicketType = async (ticketTypeId, updateData, kioskId = null)
       amount[kioskId] = formatAmount(newCounter, newVault);
     }
     
+    // If kioskId and min_threshold provided, update min_threshold map
+    if (kioskId && min_threshold !== undefined) {
+      minThresholdMap[kioskId] = min_threshold;
+    }
+    
     // Prepare update
     const cleanUpdateData = {
       ...globalUpdates,
       amount,
       updated_date: Timestamp.now()
     };
+    
+    // Add default_quantity_per_package as global field (if provided)
+    if (default_quantity_per_package !== undefined) {
+      cleanUpdateData.default_quantity_per_package = default_quantity_per_package;
+    }
+    
+    // Only add min_threshold_map if it has values (to avoid creating empty maps)
+    if (Object.keys(minThresholdMap).length > 0) {
+      cleanUpdateData.min_threshold_map = minThresholdMap;
+    }
     
     await updateDoc(ticketTypeRef, cleanUpdateData);
     return await getTicketTypeById(ticketTypeId, kioskId);

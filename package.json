@@ -1,5 +1,5 @@
 {
-  "name": "lucky-ticket-kiosk",
+  "name": "nobee",
   "private": true,
   "version": "0.0.0",
   "type": "module",
@@ -15,6 +15,7 @@
     "delete-all-tickets": "node scripts/delete-all-tickets.js",
     "clear-kiosk-inventory": "node scripts/clear-kiosk-inventory.js",
     "migrate": "node scripts/migrate-to-multi-kiosk.js",
+    "migrate-ticket-settings": "node scripts/migrate-ticket-settings-to-kiosk-specific.js",
     "add-assistant-permissions": "node scripts/add-assistant-permissions.js"
   },
   "dependencies": {
