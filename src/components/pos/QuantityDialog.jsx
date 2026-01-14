@@ -37,7 +37,7 @@ export default function QuantityDialog({
 
   return (
     <Dialog open={open} onOpenChange={onClose}>
-      <DialogContent className="sm:max-w-sm" dir="rtl">
+      <DialogContent className="max-w-[calc(100vw-2rem)] sm:max-w-sm" dir="rtl">
         <DialogHeader>
           <DialogTitle className="text-right text-xl">
             {ticket.name}

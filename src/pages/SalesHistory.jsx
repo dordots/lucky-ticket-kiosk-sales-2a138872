@@ -439,7 +439,7 @@ export default function SalesHistory() {
 
       {/* Sale Details Dialog */}
       <Dialog open={!!selectedSale} onOpenChange={() => setSelectedSale(null)}>
-        <DialogContent className="sm:max-w-lg" dir="rtl">
+        <DialogContent className="max-w-[calc(100vw-2rem)] sm:max-w-lg" dir="rtl">
           <DialogHeader>
             <DialogTitle>פרטי עסקה</DialogTitle>
           </DialogHeader>

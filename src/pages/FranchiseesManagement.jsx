@@ -354,7 +354,7 @@ export default function FranchiseesManagement() {
 
       {/* Create/Edit Dialog */}
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent className="sm:max-w-md" dir="rtl">
+        <DialogContent className="max-w-[calc(100vw-2rem)] sm:max-w-md" dir="rtl">
           <DialogHeader>
             <DialogTitle>{selectedUser ? "עריכת משתמש" : "הוספת משתמש חדש"}</DialogTitle>
           </DialogHeader>
@@ -491,7 +491,7 @@ export default function FranchiseesManagement() {
 
       {/* Reset Password Dialog */}
       <AlertDialog open={resetPasswordDialogOpen} onOpenChange={setResetPasswordDialogOpen}>
-        <AlertDialogContent dir="rtl">
+        <AlertDialogContent className="max-w-[calc(100vw-2rem)]" dir="rtl">
           <AlertDialogHeader>
             <AlertDialogTitle>איפוס סיסמה</AlertDialogTitle>
             <AlertDialogDescription>

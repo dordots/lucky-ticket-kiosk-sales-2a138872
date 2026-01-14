@@ -260,7 +260,7 @@ export default function KioskDetails() {
 
       {/* Edit Dialog */}
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent className="sm:max-w-md" dir="rtl">
+        <DialogContent className="max-w-[calc(100vw-2rem)] sm:max-w-md" dir="rtl">
           <DialogHeader>
             <DialogTitle>עריכת פרטי קיוסק</DialogTitle>
           </DialogHeader>

@@ -332,7 +332,7 @@ export default function KiosksManagement() {
 
       {/* Create/Edit Dialog */}
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent className="sm:max-w-md" dir="rtl">
+        <DialogContent className="max-w-[calc(100vw-2rem)] sm:max-w-md" dir="rtl">
           <DialogHeader>
             <DialogTitle>{selectedKiosk ? "עריכת קיוסק" : "הוספת קיוסק חדש"}</DialogTitle>
           </DialogHeader>
@@ -419,7 +419,7 @@ export default function KiosksManagement() {
 
       {/* Delete Dialog */}
       <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
-        <AlertDialogContent dir="rtl">
+        <AlertDialogContent className="max-w-[calc(100vw-2rem)]" dir="rtl">
           <AlertDialogHeader>
             <AlertDialogTitle>מחיקת קיוסק</AlertDialogTitle>
             <AlertDialogDescription>

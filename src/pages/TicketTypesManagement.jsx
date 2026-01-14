@@ -401,7 +401,7 @@ export default function TicketTypesManagement() {
 
       {/* Edit/Create Dialog */}
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto" dir="rtl">
+        <DialogContent className="max-w-[calc(100vw-2rem)] sm:max-w-2xl max-h-[calc(100vh-2rem)] sm:max-h-[90vh] overflow-y-auto" dir="rtl">
           <DialogHeader>
             <DialogTitle>{selectedTicket ? 'עריכת כרטיס' : 'הוספת כרטיס חדש'}</DialogTitle>
           </DialogHeader>
@@ -511,7 +511,7 @@ export default function TicketTypesManagement() {
 
       {/* Delete Confirmation Dialog */}
       <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
-        <AlertDialogContent dir="rtl">
+        <AlertDialogContent className="max-w-[calc(100vw-2rem)]" dir="rtl">
           <AlertDialogHeader>
             <AlertDialogTitle>מחיקת כרטיס</AlertDialogTitle>
             <AlertDialogDescription>
@@ -534,7 +534,7 @@ export default function TicketTypesManagement() {
 
       {/* Bulk Delete Confirmation Dialog */}
       <AlertDialog open={bulkDeleteDialogOpen} onOpenChange={setBulkDeleteDialogOpen}>
-        <AlertDialogContent dir="rtl">
+        <AlertDialogContent className="max-w-[calc(100vw-2rem)]" dir="rtl">
           <AlertDialogHeader>
             <AlertDialogTitle>מחיקת כרטיסים מרובים</AlertDialogTitle>
             <AlertDialogDescription>

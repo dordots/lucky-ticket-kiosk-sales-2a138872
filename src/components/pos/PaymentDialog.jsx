@@ -82,7 +82,7 @@ export default function PaymentDialog({
   return (
     <Dialog open={open} onOpenChange={handleDialogClose}>
       <DialogContent 
-        className="sm:max-w-md" 
+        className="max-w-[calc(100vw-2rem)] sm:max-w-md" 
         dir="rtl"
         onPointerDownOutside={(e) => {
           // Allow closing by clicking outside (on overlay) - both in form and success states

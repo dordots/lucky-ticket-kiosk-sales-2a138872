@@ -825,7 +825,7 @@ export default function Inventory() {
               />
             </div>
           </PopoverAnchor>
-          <PopoverContent className="w-[var(--radix-popover-anchor-width)] p-0" align="start" dir="rtl" onOpenAutoFocus={(e) => e.preventDefault()}>
+          <PopoverContent className="w-[var(--radix-popover-anchor-width)] p-0" side="bottom" align="start" dir="rtl" onOpenAutoFocus={(e) => e.preventDefault()}>
             <Command>
               <CommandInput 
                 placeholder="חפש כרטיס..." 
@@ -1022,7 +1022,7 @@ export default function Inventory() {
                 </Button>
               )}
             </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            <div className="grid grid-cols-3 gap-1 sm:gap-4">
               <div className="space-y-2">
                 <Label>מצב מלאי</Label>
                 <Select
@@ -1118,7 +1118,7 @@ export default function Inventory() {
               </div>
             )}
             {/* Counter Tickets Grid */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          <div className="grid grid-cols-3 gap-1 sm:gap-4">
         <AnimatePresence>
           {sortedTickets.map((ticket, index) => {
             const quantityCounter = ticket.quantity_counter ?? 0;
@@ -1138,7 +1138,7 @@ export default function Inventory() {
                 <Card className={`relative overflow-hidden ${!ticket.is_active ? 'opacity-60' : ''} ${selectedTicketIds.has(ticket.id) ? 'ring-2 ring-primary' : ''}`}>
                   {/* Color Strip or Image */}
                   {ticket.image_url ? (
-                    <div className="h-32 w-full overflow-hidden">
+                    <div className="h-20 sm:h-32 w-full overflow-hidden">
                       <img 
                         src={ticket.image_url} 
                         alt={ticket.name}
@@ -1156,18 +1156,18 @@ export default function Inventory() {
                     <div className={`h-2 ${colorClass}`} />
                   )}
                   
-                  <CardContent className="p-4">
-                    <div className="flex items-start justify-between mb-3">
-                      <div className="flex-1">
-                        <div className="flex items-center gap-2 mb-1">
-                          <div>
-                            <h3 className="font-bold text-foreground">{ticket.name}</h3>
+                  <CardContent className="p-2 sm:p-4">
+                    <div className="flex items-start justify-between mb-1 sm:mb-3">
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-1 sm:gap-2 mb-0.5 sm:mb-1">
+                          <div className="min-w-0">
+                            <h3 className="font-bold text-foreground text-xs sm:text-base truncate">{ticket.name}</h3>
                             {ticket.nickname && (
-                              <p className="text-sm text-muted-foreground font-medium">"{ticket.nickname}"</p>
+                              <p className="text-xs sm:text-sm text-muted-foreground font-medium truncate hidden sm:block">"{ticket.nickname}"</p>
                             )}
                           </div>
                         </div>
-                        <p className="text-sm text-muted-foreground">{ticket.code}</p>
+                        <p className="text-xs text-muted-foreground truncate">{ticket.code}</p>
                       </div>
                       {/* Checkbox */}
                       <div className="flex-shrink-0">
@@ -1175,40 +1175,41 @@ export default function Inventory() {
                           checked={selectedTicketIds.has(ticket.id)}
                           onCheckedChange={() => handleToggleSelect(ticket.id)}
                           id={`ticket-${ticket.id}`}
+                          className="h-3 w-3 sm:h-4 sm:w-4"
                         />
                       </div>
                     </div>
 
-                    <div className="flex items-center justify-between mb-3">
-                      <span className="text-2xl font-bold text-primary">₪{ticket.price}</span>
+                    <div className="flex items-center justify-between mb-1 sm:mb-3">
+                      <span className="text-lg sm:text-2xl font-bold text-primary">₪{ticket.price}</span>
                       {!ticket.is_active && (
-                        <Badge variant="secondary">לא פעיל</Badge>
+                        <Badge variant="secondary" className="text-xs">לא פעיל</Badge>
                       )}
                     </div>
 
                     {/* Counter Inventory Display - Only counter quantity */}
-                    <div className={`flex items-center justify-between p-3 rounded-lg ${
+                    <div className={`flex items-center justify-between p-1.5 sm:p-3 rounded-lg ${
                       isLowStock ? 'bg-amber-900/30' : 'bg-accent'
                     }`}>
-                      <div className="flex items-center gap-2">
-                        {isLowStock && <AlertTriangle className="h-4 w-4 text-amber-500" />}
-                        <Package className="h-4 w-4 text-muted-foreground" />
-                        <span className="text-sm text-foreground">מלאי בדלפק</span>
+                      <div className="flex items-center gap-1 sm:gap-2">
+                        {isLowStock && <AlertTriangle className="h-3 w-3 sm:h-4 sm:w-4 text-amber-500" />}
+                        <Package className="h-3 w-3 sm:h-4 sm:w-4 text-muted-foreground" />
+                        <span className="text-xs sm:text-sm text-foreground hidden sm:inline">מלאי בדלפק</span>
                       </div>
-                      <div className="flex flex-col items-end gap-1">
-                        <div className="flex flex-col items-end gap-0.5">
-                          <span className={`text-sm font-bold ${
+                      <div className="flex flex-col items-end gap-0.5 sm:gap-1">
+                        <div className="flex flex-col items-end gap-0 sm:gap-0.5">
+                          <span className={`text-xs sm:text-sm font-bold ${
                             quantityCounter === 0 ? 'text-red-600' : 
                             isLowStock ? 'text-amber-500' : 'text-foreground'
                           }`}>
-                            יחידות: {quantityCounter}
+                            {quantityCounter}
                           </span>
                         </div>
-                        <span className="text-xs text-muted-foreground">
+                        <span className="text-xs text-muted-foreground hidden sm:block">
                           מינימום: {ticket.min_threshold}
                         </span>
                         {ticket.default_quantity_per_package && (
-                          <span className="text-xs text-green-600 dark:text-green-400 font-medium">
+                          <span className="text-xs text-green-600 dark:text-green-400 font-medium hidden sm:block">
                             {ticket.default_quantity_per_package} כרטיסים בחבילה
                           </span>
                         )}
@@ -1216,8 +1217,8 @@ export default function Inventory() {
                     </div>
 
                     {/* Actions */}
-                    <div className="flex items-center justify-between gap-2 mt-3">
-                      <div className="flex gap-1">
+                    <div className="flex items-center justify-between gap-1 sm:gap-2 mt-1 sm:mt-3">
+                      <div className="flex gap-0.5 sm:gap-1">
                         <Button 
                           variant="ghost" 
                           size="icon" 
@@ -1235,12 +1236,12 @@ export default function Inventory() {
                           }}
                           disabled={user?.role === 'assistant' && !(activeTab === 'counter' ? canAddStockCounter : canAddStockVault)}
                           title={ticket.default_quantity_per_package ? "עדכן מלאי לפי חבילות" : "עדכן מלאי"}
-                          className={ticket.default_quantity_per_package ? "text-green-600" : ""}
+                          className={`${ticket.default_quantity_per_package ? "text-green-600" : ""} h-6 w-6 sm:h-8 sm:w-8`}
                         >
-                          <Plus className="h-4 w-4" />
+                          <Plus className="h-3 w-3 sm:h-4 sm:w-4" />
                         </Button>
                       </div>
-                      <div className="flex gap-1">
+                      <div className="flex gap-0.5 sm:gap-1">
                         <Button 
                           variant="ghost" 
                           size="icon" 
@@ -1249,8 +1250,9 @@ export default function Inventory() {
                             setViewDialogOpen(true);
                           }}
                           title="צפייה בכרטיס"
+                          className="h-6 w-6 sm:h-8 sm:w-8"
                         >
-                          <Eye className="h-4 w-4 text-muted-foreground" />
+                          <Eye className="h-3 w-3 sm:h-4 sm:w-4 text-muted-foreground" />
                         </Button>
                         <Button 
                           variant="ghost" 
@@ -1258,8 +1260,9 @@ export default function Inventory() {
                           onClick={() => handleEdit(ticket)}
                           disabled={user?.role === 'assistant' && !(activeTab === 'counter' ? canEditCounter : canEditVault)}
                           title="עריכת כרטיס"
+                          className="h-6 w-6 sm:h-8 sm:w-8"
                         >
-                          <Edit className="h-4 w-4 text-muted-foreground" />
+                          <Edit className="h-3 w-3 sm:h-4 sm:w-4 text-muted-foreground" />
                         </Button>
                         <Button 
                           variant="ghost" 
@@ -1267,8 +1270,9 @@ export default function Inventory() {
                           onClick={() => handleDelete(ticket)}
                           disabled={user?.role === 'assistant' && !canDelete}
                           title="מחיקת כרטיס"
+                          className="h-6 w-6 sm:h-8 sm:w-8"
                         >
-                          <Trash2 className="h-4 w-4 text-red-400" />
+                          <Trash2 className="h-3 w-3 sm:h-4 sm:w-4 text-red-400" />
                         </Button>
                       </div>
                     </div>
@@ -1289,7 +1293,7 @@ export default function Inventory() {
           )}
 
           {isLoading && (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            <div className="grid grid-cols-3 gap-1 sm:gap-4">
               {[1, 2, 3, 4].map((i) => (
                 <Card key={i} className="animate-pulse">
                   <div className="h-2 bg-accent" />
@@ -1321,7 +1325,7 @@ export default function Inventory() {
               </div>
             )}
             {/* Vault Tickets Grid */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          <div className="grid grid-cols-3 gap-1 sm:gap-4">
             <AnimatePresence>
               {sortedTickets.map((ticket, index) => {
                 const quantityCounter = ticket.quantity_counter ?? 0;
@@ -1341,7 +1345,7 @@ export default function Inventory() {
                     <Card className={`relative overflow-hidden ${!ticket.is_active ? 'opacity-60' : ''} ${selectedTicketIds.has(ticket.id) ? 'ring-2 ring-primary' : ''}`}>
                       {/* Color Strip or Image */}
                       {ticket.image_url ? (
-                        <div className="h-32 w-full overflow-hidden">
+                        <div className="h-20 sm:h-32 w-full overflow-hidden">
                           <img 
                             src={ticket.image_url} 
                             alt={ticket.name}
@@ -1359,14 +1363,14 @@ export default function Inventory() {
                         <div className={`h-2 ${colorClass}`} />
                       )}
                       
-                      <CardContent className="p-4">
-                        <div className="flex items-start justify-between mb-3">
-                          <div className="flex-1">
-                            <div className="flex items-center gap-2 mb-1">
-                              <div>
-                                <h3 className="font-bold text-foreground">{ticket.name}</h3>
+                      <CardContent className="p-2 sm:p-4">
+                        <div className="flex items-start justify-between mb-1 sm:mb-3">
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-1 sm:gap-2 mb-0.5 sm:mb-1">
+                              <div className="min-w-0">
+                                <h3 className="font-bold text-foreground text-xs sm:text-base truncate">{ticket.name}</h3>
                                 {ticket.nickname && (
-                                  <p className="text-xs text-muted-foreground">"{ticket.nickname}"</p>
+                                  <p className="text-xs sm:text-sm text-muted-foreground font-medium truncate hidden sm:block">"{ticket.nickname}"</p>
                                 )}
                               </div>
                             </div>
@@ -1377,40 +1381,41 @@ export default function Inventory() {
                               checked={selectedTicketIds.has(ticket.id)}
                               onCheckedChange={() => handleToggleSelect(ticket.id)}
                               id={`ticket-vault-${ticket.id}`}
+                              className="h-3 w-3 sm:h-4 sm:w-4"
                             />
                           </div>
                         </div>
 
-                        <div className="flex items-center justify-between mb-3">
-                          <span className="text-2xl font-bold text-primary">₪{ticket.price}</span>
+                        <div className="flex items-center justify-between mb-1 sm:mb-3">
+                          <span className="text-lg sm:text-2xl font-bold text-primary">₪{ticket.price}</span>
                           {!ticket.is_active && (
-                            <Badge variant="secondary">לא פעיל</Badge>
+                            <Badge variant="secondary" className="text-xs">לא פעיל</Badge>
                           )}
                         </div>
                         
                         {/* Vault Inventory Display - Only vault quantity */}
-                        <div className={`flex items-center justify-between p-3 rounded-lg ${
+                        <div className={`flex items-center justify-between p-1.5 sm:p-3 rounded-lg ${
                           isLowStock ? 'bg-amber-900/30' : 'bg-accent'
                         }`}>
-                          <div className="flex items-center gap-2">
-                            {isLowStock && <AlertTriangle className="h-4 w-4 text-amber-500" />}
-                            <Package className="h-4 w-4 text-muted-foreground" />
-                            <span className="text-sm text-foreground">מלאי בכספת</span>
+                          <div className="flex items-center gap-1 sm:gap-2">
+                            {isLowStock && <AlertTriangle className="h-3 w-3 sm:h-4 sm:w-4 text-amber-500" />}
+                            <Package className="h-3 w-3 sm:h-4 sm:w-4 text-muted-foreground" />
+                            <span className="text-xs sm:text-sm text-foreground hidden sm:inline">מלאי בכספת</span>
                           </div>
-                          <div className="flex flex-col items-end gap-1">
-                            <div className="flex flex-col items-end gap-0.5">
-                              <span className={`text-sm font-bold ${
+                          <div className="flex flex-col items-end gap-0.5 sm:gap-1">
+                            <div className="flex flex-col items-end gap-0 sm:gap-0.5">
+                              <span className={`text-xs sm:text-sm font-bold ${
                                 quantityVault === 0 ? 'text-red-600' : 
                                 isLowStock ? 'text-amber-500' : 'text-foreground'
                               }`}>
-                                יחידות: {quantityVault}
+                                {quantityVault}
                               </span>
                             </div>
-                            <span className="text-xs text-muted-foreground">
+                            <span className="text-xs text-muted-foreground hidden sm:block">
                               מינימום: {ticket.min_threshold}
                             </span>
                             {ticket.default_quantity_per_package && (
-                              <span className="text-xs text-green-600 dark:text-green-400 font-medium">
+                              <span className="text-xs text-green-600 dark:text-green-400 font-medium hidden sm:block">
                                 {ticket.default_quantity_per_package} כרטיסים בחבילה
                               </span>
                             )}
@@ -1418,8 +1423,8 @@ export default function Inventory() {
                         </div>
 
                         {/* Actions */}
-                        <div className="flex items-center justify-between gap-2 mt-3">
-                          <div className="flex gap-1">
+                        <div className="flex items-center justify-between gap-1 sm:gap-2 mt-1 sm:mt-3">
+                          <div className="flex gap-0.5 sm:gap-1">
                             <Button 
                               variant="ghost" 
                               size="icon" 
@@ -1437,9 +1442,9 @@ export default function Inventory() {
                               }}
                               disabled={user?.role === 'assistant' && !(activeTab === 'counter' ? canAddStockCounter : canAddStockVault)}
                               title={ticket.default_quantity_per_package ? "עדכן מלאי לפי חבילות" : "עדכן מלאי"}
-                              className={ticket.default_quantity_per_package ? "text-green-600" : ""}
+                              className={`${ticket.default_quantity_per_package ? "text-green-600" : ""} h-6 w-6 sm:h-8 sm:w-8`}
                             >
-                              <Plus className="h-4 w-4" />
+                              <Plus className="h-3 w-3 sm:h-4 sm:w-4" />
                             </Button>
                             {quantityVault > 0 && (
                               <Button 
@@ -1451,12 +1456,13 @@ export default function Inventory() {
                                 }}
                                 disabled={user?.role === 'assistant' && (!canTransferVaultToCounter || !canViewVault)}
                                 title="העבר מכספת לדלפק"
+                                className="h-6 w-6 sm:h-8 sm:w-8"
                               >
-                                <Package className="h-4 w-4 text-blue-500" />
+                                <Package className="h-3 w-3 sm:h-4 sm:w-4 text-blue-500" />
                               </Button>
                             )}
                           </div>
-                          <div className="flex gap-1">
+                          <div className="flex gap-0.5 sm:gap-1">
                             <Button 
                               variant="ghost" 
                               size="icon" 
@@ -1465,8 +1471,9 @@ export default function Inventory() {
                                 setViewDialogOpen(true);
                               }}
                               title="צפייה בכרטיס"
+                              className="h-6 w-6 sm:h-8 sm:w-8"
                             >
-                              <Eye className="h-4 w-4 text-muted-foreground" />
+                              <Eye className="h-3 w-3 sm:h-4 sm:w-4 text-muted-foreground" />
                             </Button>
                             <Button 
                               variant="ghost" 
@@ -1474,8 +1481,9 @@ export default function Inventory() {
                               onClick={() => handleEdit(ticket)}
                               disabled={user?.role === 'assistant' && !(activeTab === 'counter' ? canEditCounter : canEditVault)}
                               title="עריכת כרטיס"
+                              className="h-6 w-6 sm:h-8 sm:w-8"
                             >
-                              <Edit className="h-4 w-4 text-muted-foreground" />
+                              <Edit className="h-3 w-3 sm:h-4 sm:w-4 text-muted-foreground" />
                             </Button>
                             <Button 
                               variant="ghost" 
@@ -1483,8 +1491,9 @@ export default function Inventory() {
                               onClick={() => handleDelete(ticket)}
                               disabled={user?.role === 'assistant' && !canDelete}
                               title="מחיקת כרטיס"
+                              className="h-6 w-6 sm:h-8 sm:w-8"
                             >
-                              <Trash2 className="h-4 w-4 text-red-400" />
+                              <Trash2 className="h-3 w-3 sm:h-4 sm:w-4 text-red-400" />
                             </Button>
                           </div>
                         </div>
@@ -1505,7 +1514,7 @@ export default function Inventory() {
           )}
 
           {isLoading && (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            <div className="grid grid-cols-3 gap-1 sm:gap-4">
               {[1, 2, 3, 4].map((i) => (
                 <Card key={i} className="animate-pulse">
                   <div className="h-2 bg-accent" />
@@ -1524,7 +1533,7 @@ export default function Inventory() {
 
       {/* Add/Edit Dialog */}
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent className="sm:max-w-md max-h-[90vh] flex flex-col" dir="rtl">
+        <DialogContent className="max-w-[calc(100vw-2rem)] sm:max-w-md max-h-[calc(100vh-2rem)] sm:max-h-[90vh] flex flex-col" dir="rtl">
           <DialogHeader className="flex-shrink-0">
             <DialogTitle>
               {(() => {
@@ -2035,7 +2044,7 @@ export default function Inventory() {
 
       {/* Transfer Inventory Dialog */}
       <Dialog open={transferDialogOpen} onOpenChange={setTransferDialogOpen}>
-        <DialogContent className="sm:max-w-md" dir="rtl">
+        <DialogContent className="max-w-[calc(100vw-2rem)] sm:max-w-md" dir="rtl">
           <DialogHeader>
             <DialogTitle>העברת מלאי מכספת לדלפק</DialogTitle>
           </DialogHeader>
@@ -2208,7 +2217,7 @@ export default function Inventory() {
 
       {/* Packages Dialog */}
       <Dialog open={packagesDialogOpen} onOpenChange={setPackagesDialogOpen}>
-        <DialogContent className="sm:max-w-md">
+        <DialogContent className="max-w-[calc(100vw-2rem)] sm:max-w-md">
           <DialogHeader>
             <DialogTitle>
               הוספת מלאי ל{packagesFormData.destination === "counter" ? "דלפק" : "כספת"}
@@ -2495,7 +2504,7 @@ export default function Inventory() {
 
       {/* View Ticket Dialog */}
       <Dialog open={viewDialogOpen} onOpenChange={setViewDialogOpen}>
-        <DialogContent className="sm:max-w-2xl max-h-[90vh] flex flex-col" dir="rtl">
+        <DialogContent className="max-w-[calc(100vw-2rem)] sm:max-w-2xl max-h-[calc(100vh-2rem)] sm:max-h-[90vh] flex flex-col" dir="rtl">
           <DialogHeader className="flex-shrink-0">
             <DialogTitle>צפייה בכרטיס</DialogTitle>
           </DialogHeader>
@@ -2592,7 +2601,7 @@ export default function Inventory() {
 
       {/* Delete Confirmation */}
       <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
-        <AlertDialogContent dir="rtl">
+        <AlertDialogContent className="max-w-[calc(100vw-2rem)]" dir="rtl">
           <AlertDialogHeader>
             <AlertDialogTitle>מחיקת סוג כרטיס</AlertDialogTitle>
             <AlertDialogDescription>
@@ -2614,7 +2623,7 @@ export default function Inventory() {
 
       {/* Bulk Delete Confirmation Dialog */}
       <AlertDialog open={bulkDeleteDialogOpen} onOpenChange={setBulkDeleteDialogOpen}>
-        <AlertDialogContent dir="rtl">
+        <AlertDialogContent className="max-w-[calc(100vw-2rem)]" dir="rtl">
           <AlertDialogHeader>
             <AlertDialogTitle>מחיקת כרטיסים מרובים</AlertDialogTitle>
             <AlertDialogDescription>

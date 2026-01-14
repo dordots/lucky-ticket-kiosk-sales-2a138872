@@ -556,7 +556,7 @@ export default function UsersManagement() {
 
       {/* Edit/Create Dialog */}
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent className="sm:max-w-md max-h-[90vh] flex flex-col" dir="rtl">
+        <DialogContent className="max-w-[calc(100vw-2rem)] sm:max-w-md max-h-[calc(100vh-2rem)] sm:max-h-[90vh] flex flex-col" dir="rtl">
           <DialogHeader>
             <DialogTitle>{selectedUser ? "עריכת משתמש" : "הוספת משתמש חדש"}</DialogTitle>
           </DialogHeader>
@@ -754,7 +754,7 @@ export default function UsersManagement() {
 
       {/* Reset Password Dialog */}
       <AlertDialog open={resetPasswordDialogOpen} onOpenChange={setResetPasswordDialogOpen}>
-        <AlertDialogContent dir="rtl">
+        <AlertDialogContent className="max-w-[calc(100vw-2rem)]" dir="rtl">
           <AlertDialogHeader>
             <AlertDialogTitle>איפוס סיסמה</AlertDialogTitle>
             <AlertDialogDescription>
@@ -787,7 +787,7 @@ export default function UsersManagement() {
 
       {/* User Limit Dialog */}
       <AlertDialog open={userLimitDialogOpen} onOpenChange={setUserLimitDialogOpen}>
-        <AlertDialogContent dir="rtl">
+        <AlertDialogContent className="max-w-[calc(100vw-2rem)]" dir="rtl">
           <AlertDialogHeader>
             <AlertDialogTitle className="flex items-center gap-2">
               <ShieldAlert className="h-5 w-5 text-amber-500" />

@@ -16,7 +16,7 @@ const colorMap = {
 
 function TicketGrid({ tickets, onSelect, selectedItems }) {
   return (
-    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+    <div className="grid grid-cols-3 gap-1 sm:gap-4">
       {tickets.map((ticket, index) => {
         const quantityCounter = ticket.quantity_counter ?? 0;
         const isLowStock = quantityCounter <= (ticket.min_threshold || 10);
@@ -33,7 +33,7 @@ function TicketGrid({ tickets, onSelect, selectedItems }) {
             onClick={() => !isOutOfStock && onSelect(ticket)}
             disabled={isOutOfStock}
             className={`
-              relative p-4 rounded-2xl text-right transition-all duration-200
+              relative p-2 sm:p-4 rounded-xl sm:rounded-2xl text-right transition-all duration-200
               ${isOutOfStock 
                 ? 'bg-accent cursor-not-allowed opacity-60' 
                 : 'bg-card shadow-sm hover:shadow-lg hover:scale-[1.02] active:scale-[0.98] cursor-pointer'
@@ -43,7 +43,7 @@ function TicketGrid({ tickets, onSelect, selectedItems }) {
           >
             {/* Ticket Color Header or Image */}
             {ticket.image_url ? (
-              <div className="h-32 rounded-xl overflow-hidden mb-3">
+              <div className="h-20 sm:h-32 rounded-xl overflow-hidden mb-1 sm:mb-3">
                 <img 
                   src={ticket.image_url} 
                   alt={ticket.name}
@@ -54,8 +54,8 @@ function TicketGrid({ tickets, onSelect, selectedItems }) {
                   onError={(e) => {
                     e.target.style.display = 'none';
                     e.target.parentElement.innerHTML = `
-                      <div class="h-20 rounded-xl bg-gradient-to-br ${gradient} flex items-center justify-center mb-3">
-                        <span class="text-3xl font-bold text-white/90">${ticket.code || ticket.name.charAt(0)}</span>
+                      <div class="h-16 sm:h-20 rounded-xl bg-gradient-to-br ${gradient} flex items-center justify-center mb-1 sm:mb-3">
+                        <span class="text-xl sm:text-3xl font-bold text-white/90">${ticket.code || ticket.name.charAt(0)}</span>
                       </div>
                     `;
                   }}
@@ -63,32 +63,32 @@ function TicketGrid({ tickets, onSelect, selectedItems }) {
               </div>
             ) : (
               <div className={`
-                h-20 rounded-xl bg-gradient-to-br ${gradient}
-                flex items-center justify-center mb-3
+                h-16 sm:h-20 rounded-xl bg-gradient-to-br ${gradient}
+                flex items-center justify-center mb-1 sm:mb-3
               `}>
-                <span className="text-3xl font-bold text-white/90">
+                <span className="text-xl sm:text-3xl font-bold text-white/90">
                   {ticket.code || ticket.name.charAt(0)}
                 </span>
               </div>
             )}
 
             {/* Ticket Info */}
-            <div className="mb-1">
-              <h3 className="font-semibold text-foreground truncate">
+            <div className="mb-0.5 sm:mb-1">
+              <h3 className="font-semibold text-foreground truncate text-xs sm:text-base">
                 {ticket.name}
               </h3>
               {ticket.nickname && (
-                <p className="text-xs text-muted-foreground font-medium truncate">"{ticket.nickname}"</p>
+                <p className="text-xs text-muted-foreground font-medium truncate hidden sm:block">"{ticket.nickname}"</p>
               )}
             </div>
             
             <div className="flex items-center justify-between">
-              <span className="text-xl font-bold text-primary">
+              <span className="text-base sm:text-xl font-bold text-primary">
                 ₪{ticket.price}
               </span>
               <div className="flex items-center gap-1 text-muted-foreground">
-                <Package className="h-3.5 w-3.5" />
-                <span className="text-sm">{quantityCounter}</span>
+                <Package className="h-3 w-3 sm:h-3.5 sm:w-3.5" />
+                <span className="text-xs sm:text-sm">{quantityCounter}</span>
               </div>
             </div>
 

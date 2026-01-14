@@ -81,8 +81,10 @@ export default function Onboarding() {
       const initialData = {};
       tickets.forEach(ticket => {
         initialData[ticket.id] = {
-          quantity_counter: "",
-          quantity_vault: "",
+          counter_units: "",
+          counter_packages: "",
+          vault_units: "",
+          vault_packages: "",
         };
       });
       setInventoryData(initialData);
@@ -107,12 +109,11 @@ export default function Onboarding() {
 
       // Validate at least one ticket has inventory (only what was entered, not 0)
       const hasInventory = Object.values(inventoryData).some(data => {
-        const counterStr = data.quantity_counter?.toString().trim() || "";
-        const vaultStr = data.quantity_vault?.toString().trim() || "";
-        // Only count if field was actually filled (not empty string)
-        const counter = counterStr !== "" ? parseInt(counterStr) || 0 : 0;
-        const vault = vaultStr !== "" ? parseInt(vaultStr) || 0 : 0;
-        return counter > 0 || vault > 0;
+        const counterUnits = data.counter_units?.toString().trim() || "";
+        const counterPackages = data.counter_packages?.toString().trim() || "";
+        const vaultUnits = data.vault_units?.toString().trim() || "";
+        const vaultPackages = data.vault_packages?.toString().trim() || "";
+        return counterUnits !== "" || counterPackages !== "" || vaultUnits !== "" || vaultPackages !== "";
       });
 
       if (!hasInventory) {
@@ -125,25 +126,33 @@ export default function Onboarding() {
         const ticket = tickets.find(t => t.id === ticketId);
         if (!ticket) continue;
         
-        // Only process if field was actually filled (not empty string)
-        const counterStr = data.quantity_counter?.toString().trim() || "";
-        const vaultStr = data.quantity_vault?.toString().trim() || "";
+        // Get values from mutually exclusive fields
+        const counterUnitsStr = data.counter_units?.toString().trim() || "";
+        const counterPackagesStr = data.counter_packages?.toString().trim() || "";
+        const vaultUnitsStr = data.vault_units?.toString().trim() || "";
+        const vaultPackagesStr = data.vault_packages?.toString().trim() || "";
         
-        // Skip if both fields are empty
-        if (counterStr === "" && vaultStr === "") {
+        // Skip if all fields are empty
+        if (counterUnitsStr === "" && counterPackagesStr === "" && vaultUnitsStr === "" && vaultPackagesStr === "") {
           continue;
         }
         
-        // If default_quantity_per_package exists, multiply by it, otherwise use value directly
-        const counterInput = counterStr !== "" ? (parseInt(counterStr) || 0) : 0;
-        const vaultInput = vaultStr !== "" ? (parseInt(vaultStr) || 0) : 0;
+        // Calculate counter quantity (units or packages * default_quantity_per_package)
+        let counter = 0;
+        if (counterUnitsStr !== "") {
+          counter = parseInt(counterUnitsStr) || 0;
+        } else if (counterPackagesStr !== "" && ticket.default_quantity_per_package) {
+          counter = (parseInt(counterPackagesStr) || 0) * ticket.default_quantity_per_package;
+        }
         
-        const counter = ticket.default_quantity_per_package 
-          ? counterInput * ticket.default_quantity_per_package 
-          : counterInput;
-        const vault = ticket.default_quantity_per_package 
-          ? vaultInput * ticket.default_quantity_per_package 
-          : vaultInput;
+        // Calculate vault quantity (units or packages * default_quantity_per_package)
+        let vault = 0;
+        if (vaultUnitsStr !== "") {
+          vault = parseInt(vaultUnitsStr) || 0;
+        } else if (vaultPackagesStr !== "" && ticket.default_quantity_per_package) {
+          vault = (parseInt(vaultPackagesStr) || 0) * ticket.default_quantity_per_package;
+        }
+        
         // Only update if there's actual inventory (counter or vault > 0)
         if (counter > 0 || vault > 0) {
           updates.push(
@@ -348,7 +357,7 @@ export default function Onboarding() {
                     </p>
                   </div>
 
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mt-8">
+                  <div className="grid grid-cols-3 gap-1 sm:gap-4 mt-8">
                     <div className="text-center p-4 rounded-lg bg-indigo-50 dark:bg-indigo-900/20">
                       <Package className="h-8 w-8 mx-auto mb-2 text-indigo-600" />
                       <h3 className="font-semibold mb-1">הגדרת מלאי</h3>
@@ -415,23 +424,23 @@ export default function Onboarding() {
                       </AlertDescription>
                     </Alert>
                   ) : (
-                    <div className="space-y-4 max-h-[500px] overflow-y-auto pr-2">
+                    <div className="grid grid-cols-3 gap-0.5 sm:gap-4 max-h-[500px] overflow-y-auto pr-1 sm:pr-2">
                       {filteredAndSortedTickets.map((ticket) => {
                         const data = inventoryData[ticket.id] || {
-                          quantity_counter: "",
-                          quantity_vault: "",
+                          counter_units: "",
+                          counter_packages: "",
+                          vault_units: "",
+                          vault_packages: "",
                         };
-                        const counter = parseInt(data.quantity_counter) || 0;
-                        const vault = parseInt(data.quantity_vault) || 0;
 
                         return (
-                          <Card key={ticket.id} className="p-4">
-                            <div className="flex items-start gap-4">
+                          <Card key={ticket.id} className="p-1 sm:p-4">
+                            <div className="flex flex-col items-center gap-0.5 sm:gap-2">
                               {ticket.image_url && (
                                 <img
                                   src={ticket.image_url}
                                   alt={ticket.name}
-                                  className="w-16 h-16 object-cover rounded-lg"
+                                  className="w-8 h-8 sm:w-16 sm:h-16 object-cover rounded flex-shrink-0"
                                   loading="lazy"
                                   width="64"
                                   height="64"
@@ -440,75 +449,118 @@ export default function Onboarding() {
                                   }}
                                 />
                               )}
-                              <div className="flex-1">
-                                <h3 className="font-semibold text-foreground mb-1">
+                              <div className="flex-1 w-full min-w-0">
+                                <h3 className="font-semibold text-foreground mb-0 text-[10px] sm:text-base truncate text-center">
                                   {ticket.name}
                                 </h3>
-                                <p className="text-sm text-muted-foreground mb-3">
-                                  מחיר: ₪{ticket.price}
+                                <p className="text-[9px] sm:text-sm text-muted-foreground mb-0.5 sm:mb-1 text-center">
+                                  ₪{ticket.price}
                                 </p>
-                                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-                                  <div className="space-y-1">
-                                    <Label className="text-xs">
-                                      {ticket.default_quantity_per_package ? "מספר חבילות בדלפק" : "כמות בדלפק"}
-                                    </Label>
-                                    <Input
-                                      type="number"
-                                      value={data.quantity_counter}
-                                      onChange={(e) => {
-                                        const val = e.target.value;
-                                        if (val === "" || parseInt(val) >= 0) {
-                                          updateInventoryData(ticket.id, 'quantity_counter', val);
-                                        }
-                                      }}
-                                      placeholder="0"
-                                      min="0"
-                                      className="h-9"
-                                    />
+                                
+                                {/* Counter Section */}
+                                <div className="space-y-0.5 sm:space-y-1 mb-0.5 sm:mb-1">
+                                  <Label className="text-[8px] sm:text-xs leading-tight block text-center font-semibold">
+                                    דלפק
+                                  </Label>
+                                  <div className="grid grid-cols-2 gap-0.5 sm:gap-1">
+                                    <div className="space-y-0.5">
+                                      <Label className="text-[7px] sm:text-[10px] leading-tight block text-center">
+                                        יחידות
+                                      </Label>
+                                      <Input
+                                        type="number"
+                                        value={data.counter_units}
+                                        onChange={(e) => {
+                                          const val = e.target.value;
+                                          const numVal = parseInt(val) || 0;
+                                          updateInventoryData(ticket.id, 'counter_units', val);
+                                          if (numVal > 0) {
+                                            updateInventoryData(ticket.id, 'counter_packages', "");
+                                          }
+                                        }}
+                                        placeholder="0"
+                                        min="0"
+                                        className="h-5 sm:h-7 text-[10px] sm:text-xs p-0.5 sm:p-1"
+                                        disabled={!!data.counter_packages && parseInt(data.counter_packages) > 0}
+                                      />
+                                    </div>
                                     {ticket.default_quantity_per_package && (
-                                      <>
-                                        <p className="text-xs text-muted-foreground">
-                                          {ticket.default_quantity_per_package} כרטיסים בחבילה
-                                        </p>
-                                        {data.quantity_counter && parseInt(data.quantity_counter) > 0 && (
-                                          <p className="text-xs text-green-600 font-medium">
-                                            סה"כ: {parseInt(data.quantity_counter || 0) * ticket.default_quantity_per_package} כרטיסים
-                                          </p>
-                                        )}
-                                      </>
+                                      <div className="space-y-0.5">
+                                        <Label className="text-[7px] sm:text-[10px] leading-tight block text-center">
+                                          חבילות
+                                        </Label>
+                                        <Input
+                                          type="number"
+                                          value={data.counter_packages}
+                                          onChange={(e) => {
+                                            const val = e.target.value;
+                                            const numVal = parseInt(val) || 0;
+                                            updateInventoryData(ticket.id, 'counter_packages', val);
+                                            if (numVal > 0) {
+                                              updateInventoryData(ticket.id, 'counter_units', "");
+                                            }
+                                          }}
+                                          placeholder="0"
+                                          min="0"
+                                          className="h-5 sm:h-7 text-[10px] sm:text-xs p-0.5 sm:p-1"
+                                          disabled={!!data.counter_units && parseInt(data.counter_units) > 0}
+                                        />
+                                      </div>
                                     )}
                                   </div>
-                                  <div className="space-y-1">
-                                    <Label className="text-xs">
-                                      {ticket.default_quantity_per_package ? "מספר חבילות בכספת" : "כמות בכספת"}
-                                    </Label>
-                                    <Input
-                                      type="number"
-                                      value={data.quantity_vault}
-                                      onChange={(e) => {
-                                        const val = e.target.value;
-                                        if (val === "" || parseInt(val) >= 0) {
-                                          updateInventoryData(ticket.id, 'quantity_vault', val);
-                                        }
-                                      }}
-                                      placeholder="0"
-                                      min="0"
-                                      className="h-9"
-                                    />
+                                </div>
+
+                                {/* Vault Section */}
+                                <div className="space-y-0.5 sm:space-y-1">
+                                  <Label className="text-[8px] sm:text-xs leading-tight block text-center font-semibold">
+                                    כספת
+                                  </Label>
+                                  <div className="grid grid-cols-2 gap-0.5 sm:gap-1">
+                                    <div className="space-y-0.5">
+                                      <Label className="text-[7px] sm:text-[10px] leading-tight block text-center">
+                                        יחידות
+                                      </Label>
+                                      <Input
+                                        type="number"
+                                        value={data.vault_units}
+                                        onChange={(e) => {
+                                          const val = e.target.value;
+                                          const numVal = parseInt(val) || 0;
+                                          updateInventoryData(ticket.id, 'vault_units', val);
+                                          if (numVal > 0) {
+                                            updateInventoryData(ticket.id, 'vault_packages', "");
+                                          }
+                                        }}
+                                        placeholder="0"
+                                        min="0"
+                                        className="h-5 sm:h-7 text-[10px] sm:text-xs p-0.5 sm:p-1"
+                                        disabled={!!data.vault_packages && parseInt(data.vault_packages) > 0}
+                                      />
+                                    </div>
                                     {ticket.default_quantity_per_package && (
-                                      <>
-                                        <p className="text-xs text-muted-foreground">
-                                          {ticket.default_quantity_per_package} כרטיסים בחבילה
-                                        </p>
-                                        {data.quantity_vault && parseInt(data.quantity_vault) > 0 && (
-                                          <p className="text-xs text-green-600 font-medium">
-                                            סה"כ: {parseInt(data.quantity_vault || 0) * ticket.default_quantity_per_package} כרטיסים
-                                          </p>
-                                        )}
-                                      </>
+                                      <div className="space-y-0.5">
+                                        <Label className="text-[7px] sm:text-[10px] leading-tight block text-center">
+                                          חבילות
+                                        </Label>
+                                        <Input
+                                          type="number"
+                                          value={data.vault_packages}
+                                          onChange={(e) => {
+                                            const val = e.target.value;
+                                            const numVal = parseInt(val) || 0;
+                                            updateInventoryData(ticket.id, 'vault_packages', val);
+                                            if (numVal > 0) {
+                                              updateInventoryData(ticket.id, 'vault_units', "");
+                                            }
+                                          }}
+                                          placeholder="0"
+                                          min="0"
+                                          className="h-5 sm:h-7 text-[10px] sm:text-xs p-0.5 sm:p-1"
+                                          disabled={!!data.vault_units && parseInt(data.vault_units) > 0}
+                                        />
+                                      </div>
                                     )}
                                   </div>
-                                  {/* is_opened field removed - no longer used */}
                                 </div>
                               </div>
                             </div>
