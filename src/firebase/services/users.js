@@ -148,9 +148,7 @@ export const getUsersByRole = async (role) => {
     console.error('Error getting users by role:', error);
     throw error;
   }
-};
-
-// Delete user document
+};// Delete user document
 export const deleteUserDoc = async (userId) => {
   try {
     const userRef = doc(db, COLLECTION_NAME, userId);
