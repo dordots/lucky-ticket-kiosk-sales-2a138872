@@ -165,9 +165,7 @@ export const deleteUserDoc = async (userId) => {
 // Helper function to check if user is system manager
 export const isSystemManager = (user) => {
   return user?.role === 'system_manager';
-};
-
-// Helper function to check if user is franchisee
+};// Helper function to check if user is franchisee
 export const isFranchisee = (user) => {
   return user?.role === 'franchisee';
 };

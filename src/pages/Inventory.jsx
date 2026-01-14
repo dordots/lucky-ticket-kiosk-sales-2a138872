@@ -27,6 +27,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   Dialog,
@@ -98,7 +99,9 @@ export default function Inventory() {
   const [activeTab, setActiveTab] = useState("counter"); // "counter" or "vault"
   const [dialogOpen, setDialogOpen] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [bulkDeleteDialogOpen, setBulkDeleteDialogOpen] = useState(false);
   const [selectedTicket, setSelectedTicket] = useState(null);
+  const [selectedTicketIds, setSelectedTicketIds] = useState(new Set());
   const { currentKiosk, isLoading: kioskLoading } = useKiosk();
   const [formData, setFormData] = useState({
     name: "",
@@ -281,6 +284,20 @@ export default function Inventory() {
     },
   });
 
+  const bulkDeleteMutation = useMutation({
+    mutationFn: async ({ ids, kioskId }) => {
+      // Delete all selected tickets from kiosk inventory in parallel
+      await Promise.all(ids.map(id => TicketType.removeKioskInventory(id, kioskId)));
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['tickets-inventory', currentKiosk?.id] });
+      queryClient.invalidateQueries({ queryKey: ['tickets-dashboard', currentKiosk?.id] });
+      queryClient.invalidateQueries({ queryKey: ['tickets-active'] });
+      setBulkDeleteDialogOpen(false);
+      setSelectedTicketIds(new Set());
+    },
+  });
+
   // Check permissions for viewing counter/vault tabs
   const canViewCounter = user?.role !== 'assistant' || hasPermission('inventory_view_counter');
   const canViewVault = user?.role !== 'assistant' || hasPermission('inventory_view_vault');
@@ -352,6 +369,41 @@ export default function Inventory() {
     if (user?.role === 'assistant' && !canDelete) return;
     setSelectedTicket(ticket);
     setDeleteDialogOpen(true);
+  };
+
+  const handleToggleSelect = (ticketId) => {
+    const newSelected = new Set(selectedTicketIds);
+    if (newSelected.has(ticketId)) {
+      newSelected.delete(ticketId);
+    } else {
+      newSelected.add(ticketId);
+    }
+    setSelectedTicketIds(newSelected);
+  };
+
+  const handleSelectAll = () => {
+    if (selectedTicketIds.size === tabFilteredTickets.length && tabFilteredTickets.length > 0) {
+      // Deselect all
+      setSelectedTicketIds(new Set());
+    } else {
+      // Select all
+      setSelectedTicketIds(new Set(tabFilteredTickets.map(t => t.id)));
+    }
+  };
+
+  const handleBulkDelete = () => {
+    if (selectedTicketIds.size > 0) {
+      setBulkDeleteDialogOpen(true);
+    }
+  };
+
+  const handleConfirmBulkDelete = async () => {
+    if (selectedTicketIds.size > 0 && currentKiosk?.id) {
+      await bulkDeleteMutation.mutateAsync({ 
+        ids: Array.from(selectedTicketIds),
+        kioskId: currentKiosk.id
+      });
+    }
   };
 
   const handleSubmit = async () => {
@@ -663,6 +715,11 @@ export default function Inventory() {
     }
   }, [activeTab, canViewCounter, canViewVault]);
 
+  // Reset selected tickets when switching tabs
+  useEffect(() => {
+    setSelectedTicketIds(new Set());
+  }, [activeTab]);
+
   // Filter tickets by active tab (counter or vault)
   const tabFilteredTickets = useMemo(() => {
     return filteredTickets.filter(ticket => {
@@ -879,9 +936,10 @@ export default function Inventory() {
         </div>
 
         {/* Sort and Filter Controls */}
-        <div className="flex flex-wrap items-center gap-3">
-          {/* Sort Controls */}
-          <div className="flex items-center gap-2 bg-accent p-2 rounded-lg border border-border">
+        <div className="flex flex-wrap items-center gap-3 justify-between">
+          <div className="flex flex-wrap items-center gap-3">
+            {/* Sort Controls */}
+            <div className="flex items-center gap-2 bg-accent p-2 rounded-lg border border-border">
             <ArrowUpDown className="h-4 w-4 text-muted-foreground" />
             <Select value={sortBy} onValueChange={setSortBy}>
               <SelectTrigger className="w-[160px] h-8 text-sm border-0 bg-transparent focus:ring-0">
@@ -911,20 +969,38 @@ export default function Inventory() {
             </Button>
           </div>
 
-          {/* Advanced Filters Button */}
-          <Button
-            variant={showAdvancedFilters ? "default" : "outline"}
-            onClick={() => setShowAdvancedFilters(!showAdvancedFilters)}
-            className="h-8"
-          >
-            <Filter className="h-4 w-4 ml-2" />
-            פילטרים
-            {hasActiveFilters && (
-              <Badge variant="secondary" className="mr-2 bg-indigo-100 text-indigo-700 text-xs">
-                פעיל
-              </Badge>
-            )}
-          </Button>
+            {/* Advanced Filters Button */}
+            <Button
+              variant={showAdvancedFilters ? "default" : "outline"}
+              onClick={() => setShowAdvancedFilters(!showAdvancedFilters)}
+              className="h-8"
+            >
+              <Filter className="h-4 w-4 ml-2" />
+              פילטרים
+              {hasActiveFilters && (
+                <Badge variant="secondary" className="mr-2 bg-indigo-100 text-indigo-700 text-xs">
+                  פעיל
+                </Badge>
+              )}
+            </Button>
+          </div>
+          {/* Bulk Delete Button */}
+          {selectedTicketIds.size > 0 && (
+            <div className="flex items-center gap-2">
+              <span className="text-sm text-muted-foreground">
+                {selectedTicketIds.size} כרטיסים נבחרו
+              </span>
+              <Button
+                variant="destructive"
+                onClick={handleBulkDelete}
+                disabled={bulkDeleteMutation.isPending || (user?.role === 'assistant' && !canDelete)}
+                className="h-8"
+              >
+                <Trash2 className="h-4 w-4 ml-2" />
+                מחק נבחרים
+              </Button>
+            </div>
+          )}
         </div>
       </div>
 
@@ -1028,6 +1104,19 @@ export default function Inventory() {
 
         {canViewCounter && (
           <TabsContent value="counter" className="mt-4">
+            {/* Select All Checkbox */}
+            {tabFilteredTickets.length > 0 && (
+              <div className="flex items-center gap-2 pb-3 mb-3 border-b">
+                <Checkbox
+                  checked={selectedTicketIds.size === tabFilteredTickets.length && tabFilteredTickets.length > 0}
+                  onCheckedChange={handleSelectAll}
+                  id="select-all-counter"
+                />
+                <Label htmlFor="select-all-counter" className="cursor-pointer">
+                  בחר הכל ({tabFilteredTickets.length})
+                </Label>
+              </div>
+            )}
             {/* Counter Tickets Grid */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
         <AnimatePresence>
@@ -1046,7 +1135,7 @@ export default function Inventory() {
                 exit={{ opacity: 0, scale: 0.9 }}
                 transition={{ delay: index * 0.05 }}
               >
-                <Card className={`relative overflow-hidden ${!ticket.is_active ? 'opacity-60' : ''}`}>
+                <Card className={`relative overflow-hidden ${!ticket.is_active ? 'opacity-60' : ''} ${selectedTicketIds.has(ticket.id) ? 'ring-2 ring-primary' : ''}`}>
                   {/* Color Strip or Image */}
                   {ticket.image_url ? (
                     <div className="h-32 w-full overflow-hidden">
@@ -1079,6 +1168,14 @@ export default function Inventory() {
                           </div>
                         </div>
                         <p className="text-sm text-muted-foreground">{ticket.code}</p>
+                      </div>
+                      {/* Checkbox */}
+                      <div className="flex-shrink-0">
+                        <Checkbox
+                          checked={selectedTicketIds.has(ticket.id)}
+                          onCheckedChange={() => handleToggleSelect(ticket.id)}
+                          id={`ticket-${ticket.id}`}
+                        />
                       </div>
                     </div>
 
@@ -1210,6 +1307,19 @@ export default function Inventory() {
 
         {canViewVault && (
           <TabsContent value="vault" className="mt-4">
+            {/* Select All Checkbox */}
+            {tabFilteredTickets.length > 0 && (
+              <div className="flex items-center gap-2 pb-3 mb-3 border-b">
+                <Checkbox
+                  checked={selectedTicketIds.size === tabFilteredTickets.length && tabFilteredTickets.length > 0}
+                  onCheckedChange={handleSelectAll}
+                  id="select-all-vault"
+                />
+                <Label htmlFor="select-all-vault" className="cursor-pointer">
+                  בחר הכל ({tabFilteredTickets.length})
+                </Label>
+              </div>
+            )}
             {/* Vault Tickets Grid */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
             <AnimatePresence>
@@ -1228,7 +1338,7 @@ export default function Inventory() {
                     exit={{ opacity: 0, scale: 0.9 }}
                     transition={{ delay: index * 0.05 }}
                   >
-                    <Card className={`relative overflow-hidden ${!ticket.is_active ? 'opacity-60' : ''}`}>
+                    <Card className={`relative overflow-hidden ${!ticket.is_active ? 'opacity-60' : ''} ${selectedTicketIds.has(ticket.id) ? 'ring-2 ring-primary' : ''}`}>
                       {/* Color Strip or Image */}
                       {ticket.image_url ? (
                         <div className="h-32 w-full overflow-hidden">
@@ -1260,6 +1370,14 @@ export default function Inventory() {
                                 )}
                               </div>
                             </div>
+                          </div>
+                          {/* Checkbox */}
+                          <div className="flex-shrink-0">
+                            <Checkbox
+                              checked={selectedTicketIds.has(ticket.id)}
+                              onCheckedChange={() => handleToggleSelect(ticket.id)}
+                              id={`ticket-vault-${ticket.id}`}
+                            />
                           </div>
                         </div>
 
@@ -2478,17 +2596,40 @@ export default function Inventory() {
           <AlertDialogHeader>
             <AlertDialogTitle>מחיקת סוג כרטיס</AlertDialogTitle>
             <AlertDialogDescription>
-              האם אתה בטוח שברצונך למחוק את "{selectedTicket?.name}"? 
-              פעולה זו לא ניתנת לביטול.
+              האם אתה בטוח שברצונך למחוק את "{selectedTicket?.name}" מהמלאי?
+              פעולה זו תמחק את הכרטיס מהמלאי של הקיוסק הנוכחי ולא ניתנת לביטול.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter className="gap-3 sm:gap-3">
             <AlertDialogCancel>ביטול</AlertDialogCancel>
-            <AlertDialogAction 
+            <AlertDialogAction
               onClick={handleConfirmDelete}
               className="bg-red-600 hover:bg-red-700"
             >
               מחק
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Bulk Delete Confirmation Dialog */}
+      <AlertDialog open={bulkDeleteDialogOpen} onOpenChange={setBulkDeleteDialogOpen}>
+        <AlertDialogContent dir="rtl">
+          <AlertDialogHeader>
+            <AlertDialogTitle>מחיקת כרטיסים מרובים</AlertDialogTitle>
+            <AlertDialogDescription>
+              האם אתה בטוח שברצונך למחוק {selectedTicketIds.size} כרטיסים מהמלאי?
+              פעולה זו תמחק את הכרטיסים מהמלאי של הקיוסק הנוכחי ולא ניתנת לביטול.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter className="gap-3 sm:gap-3">
+            <AlertDialogCancel>ביטול</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleConfirmBulkDelete}
+              disabled={bulkDeleteMutation.isPending}
+              className="bg-red-600 hover:bg-red-700"
+            >
+              {bulkDeleteMutation.isPending ? 'מוחק...' : 'מחק נבחרים'}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
