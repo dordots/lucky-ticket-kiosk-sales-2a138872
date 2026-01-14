@@ -5,7 +5,6 @@ import * as usersService from "@/firebase/services/users";
 import { auth } from "@/api/entities";
 import { motion, AnimatePresence } from "framer-motion";
 import { 
-  Plus, 
   Search, 
   Store,
   Edit, 
@@ -55,7 +54,6 @@ export default function KiosksManagement() {
   const [formData, setFormData] = useState({
     name: "",
     location: "",
-    franchisee_id: "",
     is_active: true,
   });
   const [currentUser, setCurrentUser] = useState(null);
@@ -74,6 +72,7 @@ export default function KiosksManagement() {
     enabled: currentUser?.role === 'system_manager' || currentUser?.role === 'franchisee',
   });
 
+  // Get franchisees for display only (not for editing)
   const { data: franchisees = [] } = useQuery({
     queryKey: ['franchisees-all'],
     queryFn: () => usersService.getUsersByRole('franchisee'),
@@ -113,7 +112,6 @@ export default function KiosksManagement() {
     setFormData({
       name: "",
       location: "",
-      franchisee_id: "",
       is_active: true,
     });
     setSelectedKiosk(null);
@@ -124,7 +122,6 @@ export default function KiosksManagement() {
     setFormData({
       name: kiosk.name || "",
       location: kiosk.location || "",
-      franchisee_id: kiosk.franchisee_id || "",
       is_active: kiosk.is_active !== false,
     });
     setDialogOpen(true);
@@ -136,24 +133,23 @@ export default function KiosksManagement() {
       return;
     }
 
+    // Only allow editing, not creating
+    if (!selectedKiosk) {
+      alert('יצירת קיוסק חדש נעשית דרך יצירת זכיין');
+      return;
+    }
+
     const payload = {
-      ...formData,
-      franchisee_id: formData.franchisee_id || null,
+      name: formData.name,
+      location: formData.location,
+      is_active: formData.is_active,
+      // Don't allow changing franchisee_id
     };
 
-    // If franchisee is creating, force assign to themselves
-    if (currentUser?.role === 'franchisee') {
-      payload.franchisee_id = currentUser.id;
-    }
-
-    if (selectedKiosk) {
-      await updateMutation.mutateAsync({ 
-        id: selectedKiosk.id, 
-        data: payload 
-      });
-    } else {
-      await createMutation.mutateAsync(payload);
-    }
+    await updateMutation.mutateAsync({ 
+      id: selectedKiosk.id, 
+      data: payload 
+    });
   };
 
   const handleDelete = async () => {
@@ -195,18 +191,8 @@ export default function KiosksManagement() {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-foreground">ניהול קיוסקים</h1>
-          <p className="text-muted-foreground">ניהול כל הקיוסקים במערכת</p>
+          <p className="text-muted-foreground">צפייה בכל הקיוסקים במערכת</p>
         </div>
-        <Button 
-          onClick={() => {
-            resetForm();
-            setDialogOpen(true);
-          }}
-          className="bg-theme-gradient"
-        >
-          <Plus className="h-4 w-4 ml-2" />
-          הוסף קיוסק חדש
-        </Button>
       </div>
 
       {/* Search */}
@@ -307,7 +293,6 @@ export default function KiosksManagement() {
         <div className="text-center py-12 text-muted-foreground">
           <Store className="h-12 w-12 mx-auto mb-4 opacity-30" />
           <p className="font-medium">לא נמצאו קיוסקים</p>
-          <p className="text-sm text-muted-foreground mt-1">הוסף קיוסק חדש כדי להתחיל</p>
         </div>
       )}
 
@@ -330,11 +315,11 @@ export default function KiosksManagement() {
         </div>
       )}
 
-      {/* Create/Edit Dialog */}
+      {/* Edit Dialog */}
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
         <DialogContent className="max-w-[calc(100vw-2rem)] sm:max-w-md" dir="rtl">
           <DialogHeader>
-            <DialogTitle>{selectedKiosk ? "עריכת קיוסק" : "הוספת קיוסק חדש"}</DialogTitle>
+            <DialogTitle>עריכת קיוסק</DialogTitle>
           </DialogHeader>
 
           <div className="space-y-4 py-4">
@@ -357,42 +342,6 @@ export default function KiosksManagement() {
               />
             </div>
 
-                    <div className="space-y-2">
-                      {currentUser?.role === 'franchisee' ? (
-                        <div className="text-sm text-muted-foreground">
-                          הקיוסק ישויך אליך אוטומטית
-                        </div>
-                      ) : (
-                        <>
-                        <Label>זכיין (לא חובה)</Label>
-                        <Select
-                          value={formData.franchisee_id}
-                          onValueChange={(value) => setFormData({ ...formData, franchisee_id: value === 'none' ? '' : value })}
-                        >
-                          <SelectTrigger>
-                            <SelectValue placeholder="בחר זכיין או השאר ריק" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="none">ללא זכיין</SelectItem>
-                            {franchisees
-                              .filter((franchisee) => {
-                                // exclude franchisees already assigned to another kiosk
-                                const assignedKiosk = kiosks.find(
-                                  (k) => k.franchisee_id === franchisee.id && k.id !== selectedKiosk?.id
-                                );
-                                return !assignedKiosk;
-                              })
-                              .map((franchisee) => (
-                                <SelectItem key={franchisee.id} value={franchisee.id}>
-                                  {franchisee.full_name || franchisee.email}
-                                </SelectItem>
-                              ))}
-                          </SelectContent>
-                        </Select>
-                        </>
-                      )}
-                    </div>
-
             <div className="flex items-center justify-between">
               <Label>קיוסק פעיל</Label>
               <Switch
@@ -409,9 +358,9 @@ export default function KiosksManagement() {
             <Button 
               onClick={handleSubmit}
               className="bg-theme-gradient"
-              disabled={createMutation.isPending || updateMutation.isPending}
+              disabled={updateMutation.isPending}
             >
-              {selectedKiosk ? "עדכן" : "צור"}
+              עדכן
             </Button>
           </DialogFooter>
         </DialogContent>

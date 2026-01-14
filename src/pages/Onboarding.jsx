@@ -302,7 +302,13 @@ export default function Onboarding() {
     });
   }, [tickets, searchTerm, currentStep]);
 
-  const progress = ((currentStep - 1) / (Object.keys(STEPS).length - 1)) * 100;
+  // Calculate progress based on actual step order: WELCOME -> INVENTORY -> SUMMARY -> COMMISSION -> COMPLETE
+  const getProgress = (step) => {
+    const stepOrder = [STEPS.WELCOME, STEPS.INVENTORY, STEPS.SUMMARY, STEPS.COMMISSION, STEPS.COMPLETE];
+    const stepIndex = stepOrder.indexOf(step);
+    return stepIndex >= 0 ? (stepIndex / (stepOrder.length - 1)) * 100 : 0;
+  };
+  const progress = getProgress(currentStep);
 
   if (!user || kioskLoading) {
     return (
@@ -332,7 +338,7 @@ export default function Onboarding() {
               </div>
             </div>
             <CardTitle className="text-3xl font-bold bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent">
-              ברוכים הבאים למערכת!
+              !ברוכים הבאים למערכת
             </CardTitle>
             <p className="text-muted-foreground mt-2">
               בואו נתחיל בהגדרה הראשונית של המערכת
@@ -473,7 +479,7 @@ export default function Onboarding() {
                                 <div className="grid grid-cols-2 gap-0.5">
                                   <div className="space-y-0">
                                     <Label className="text-[6px] sm:text-[8px] leading-tight block text-center">
-                                      'יח
+                                      יחידות
                                     </Label>
                                     <Input
                                       type="number"
@@ -495,7 +501,7 @@ export default function Onboarding() {
                                   {ticket.default_quantity_per_package && (
                                     <div className="space-y-0">
                                       <Label className="text-[6px] sm:text-[8px] leading-tight block text-center">
-                                       'חב
+                                       חבילות
                                       </Label>
                                       <Input
                                         type="number"
@@ -526,7 +532,7 @@ export default function Onboarding() {
                                 <div className="grid grid-cols-2 gap-0.5">
                                   <div className="space-y-0">
                                     <Label className="text-[6px] sm:text-[8px] leading-tight block text-center">
-                                      'יח
+                                      יחידות
                                     </Label>
                                     <Input
                                       type="number"
@@ -548,7 +554,7 @@ export default function Onboarding() {
                                   {ticket.default_quantity_per_package && (
                                     <div className="space-y-0">
                                       <Label className="text-[6px] sm:text-[8px] leading-tight block text-center">
-                                        'חב
+                                        חבילות
                                       </Label>
                                       <Input
                                         type="number"
@@ -582,12 +588,18 @@ export default function Onboarding() {
                                 const counterTotal = counterUnits + (counterPackages * defaultQtyPerPackage);
                                 const vaultTotal = vaultUnits + (vaultPackages * defaultQtyPerPackage);
                                 const grandTotal = counterTotal + vaultTotal;
+                                const totalPackages = counterPackages + vaultPackages;
                                 
                                 if (grandTotal > 0) {
                                   return (
                                     <div className="mt-1 pt-1 border-t border-border/50">
                                       <p className="text-[7px] sm:text-[9px] text-center text-muted-foreground">
                                         סה"כ: <span className="font-semibold text-foreground">{grandTotal} יחידות</span>
+                                        {totalPackages > 0 && defaultQtyPerPackage > 1 && (
+                                          <span className="block mt-0.5 text-[6px] sm:text-[8px]">
+                                            ({totalPackages} × {defaultQtyPerPackage})
+                                          </span>
+                                        )}
                                       </p>
                                     </div>
                                   );
@@ -713,8 +725,8 @@ export default function Onboarding() {
                                         )}
                                         {counterPackages > 0 && (
                                           <div className="flex justify-between text-muted-foreground">
-                                            <span>{counterPackages}</span>
-                                            <span>חבילות:</span>
+                                            <span>{counterPackages} × {defaultQtyPerPackage} = {counterPackages * defaultQtyPerPackage}</span>
+                                            <span>חבילות</span>
                                           </div>
                                         )}
                                       </div>
@@ -738,8 +750,8 @@ export default function Onboarding() {
                                         )}
                                         {vaultPackages > 0 && (
                                           <div className="flex justify-between text-muted-foreground">
-                                            <span>{vaultPackages}</span>
-                                            <span>חבילות:</span>
+                                            <span>{vaultPackages} × {defaultQtyPerPackage} = {vaultPackages * defaultQtyPerPackage}</span>
+                                            <span>חבילות</span>
                                           </div>
                                         )}
                                       </div>
@@ -750,12 +762,19 @@ export default function Onboarding() {
                                 {/* Total Summary */}
                                 <div className="mt-4 pt-3 border-t text-right">
                                   <div className="space-y-1">
-                                    <div className="font-bold text-lg">סה"כ יחידות: {totalUnits}</div>
+                                    <div className="font-bold text-lg">
+                                      סה"כ יחידות: {totalUnits}
+                                      {totalPackages > 0 && defaultQtyPerPackage > 1 && (
+                                        <span className="text-sm font-normal text-muted-foreground mr-2">
+                                          ({totalPackages} × {defaultQtyPerPackage})
+                                        </span>
+                                      )}
+                                    </div>
                                     {totalIndividualUnits > 0 && (
                                       <div className="text-sm text-muted-foreground">בודדים: {totalIndividualUnits}</div>
                                     )}
                                     {totalPackages > 0 && (
-                                      <div className="text-sm text-muted-foreground">חבילות {totalPackages}</div>
+                                      <div className="text-sm text-muted-foreground">חבילות: {totalPackages}</div>
                                     )}
                                   </div>
                                 </div>

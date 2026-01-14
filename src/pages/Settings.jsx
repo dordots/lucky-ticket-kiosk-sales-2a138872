@@ -389,7 +389,6 @@ export default function Settings() {
                       setCommissionRate("");
                     }
                     
-                    alert('העמלה נשמרה בהצלחה!');
                     queryClient.invalidateQueries({ queryKey: ['reports'] });
                   } catch (error) {
                     console.error('Error saving commission:', error);
