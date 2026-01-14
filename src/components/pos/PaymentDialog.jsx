@@ -201,7 +201,7 @@ export default function PaymentDialog({
                 {/* Notes */}
                 <div className="space-y-2">
                   <label className="text-sm font-medium text-slate-700">
-                    הערות (אופציונלי)
+                    הערות (לא חובה)
                   </label>
                   <Textarea
                     value={notes}

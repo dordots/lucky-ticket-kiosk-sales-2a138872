@@ -124,7 +124,8 @@ export default function Inventory() {
   const [transferDialogOpen, setTransferDialogOpen] = useState(false);
   const [transferFormData, setTransferFormData] = useState({
     ticketId: "",
-    quantity: "",
+    transfer_units: "",
+    transfer_packages: "",
   });
   const [packagesDialogOpen, setPackagesDialogOpen] = useState(false);
   const [packagesFormData, setPackagesFormData] = useState({
@@ -659,9 +660,6 @@ export default function Inventory() {
     }
   };
 
-  // Calculate statistics
-  const totalTickets = tickets.length;
-
   const filteredTickets = useMemo(() => {
     return tickets.filter(t => {
     // Search filter - includes name, code, and nickname
@@ -731,6 +729,15 @@ export default function Inventory() {
       return true;
     });
   }, [filteredTickets, activeTab]);
+
+  // Calculate ticket counts for each tab (after filtering)
+  const counterTicketsCount = useMemo(() => {
+    return filteredTickets.filter(ticket => (ticket.quantity_counter ?? 0) > 0).length;
+  }, [filteredTickets]);
+
+  const vaultTicketsCount = useMemo(() => {
+    return filteredTickets.filter(ticket => (ticket.quantity_vault ?? 0) > 0).length;
+  }, [filteredTickets]);
 
   // Sort filtered tickets
   const sortedTickets = useMemo(() => {
@@ -907,21 +914,6 @@ export default function Inventory() {
         </Popover>
       </div>
 
-      {/* Statistics Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-1 gap-4">
-        <Card className="bg-gradient-to-br from-indigo-500 to-purple-600 text-white">
-          <CardContent className="p-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-indigo-100 text-sm mb-1">סה"כ כרטיסים</p>
-                <p className="text-3xl font-bold">{totalTickets}</p>
-              </div>
-              <Package className="h-8 w-8 text-indigo-200" />
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-
       {/* Search and Filters */}
       <div className="space-y-4">
         {/* Search Bar */}
@@ -1091,13 +1083,13 @@ export default function Inventory() {
           {canViewCounter && (
             <TabsTrigger value="counter" className="flex items-center gap-2">
               <Package className="h-4 w-4" />
-              דלפק
+              דלפק ({counterTicketsCount})
             </TabsTrigger>
           )}
           {canViewVault && (
             <TabsTrigger value="vault" className="flex items-center gap-2">
               <Package className="h-4 w-4" />
-              כספת
+              כספת ({vaultTicketsCount})
             </TabsTrigger>
           )}
         </TabsList>
@@ -1451,7 +1443,7 @@ export default function Inventory() {
                                 variant="ghost" 
                                 size="icon" 
                                 onClick={() => {
-                                  setTransferFormData({ ticketId: ticket.id, quantity: "" });
+                                  setTransferFormData({ ticketId: ticket.id, transfer_units: "", transfer_packages: "" });
                                   setTransferDialogOpen(true);
                                 }}
                                 disabled={user?.role === 'assistant' && (!canTransferVaultToCounter || !canViewVault)}
@@ -1750,7 +1742,7 @@ export default function Inventory() {
                   </div>
 
                   <div className="space-y-2">
-                    <Label>כינוי (אופציונלי)</Label>
+                    <Label>כינוי (לא חובה)</Label>
                     <Input
                       value={formData.nickname}
                       onChange={(e) => setFormData({ ...formData, nickname: e.target.value })}
@@ -1897,7 +1889,7 @@ export default function Inventory() {
                         onChange={(e) => setFormData({ ...formData, default_quantity_per_package: e.target.value })}
                         placeholder="50"
                       />
-                      <p className="text-xs text-slate-500">כמות יחידות בחבילה חדשה (אופציונלי)</p>
+                      <p className="text-xs text-slate-500">כמות יחידות בחבילה חדשה (לא חובה)</p>
                     </div>
                     <div className="space-y-2">
                       <Label>סף התראה <span className="text-red-500">*</span></Label>
@@ -2077,28 +2069,64 @@ export default function Inventory() {
                         </div>
                       </div>
                       
-                      <div className="space-y-2">
-                        <Label>כמות להעברה</Label>
-                        <Input
-                          type="number"
-                          value={transferFormData.quantity}
-                          onChange={(e) => {
-                            const val = parseInt(e.target.value) || 0;
-                            const max = maxTransfer;
-                            setTransferFormData({ ...transferFormData, quantity: val > max ? max.toString() : e.target.value });
-                          }}
-                          placeholder="0"
-                          min="1"
-                          max={maxTransfer}
-                        />
+                      <div className="space-y-3">
+                        <Label className="text-base font-semibold">כמות להעברה</Label>
+                        <div className="grid grid-cols-2 gap-4">
+                          <div className="space-y-2">
+                            <Label>מספר יחידות</Label>
+                            <Input
+                              type="number"
+                              value={transferFormData.transfer_units}
+                              onChange={(e) => {
+                                const val = e.target.value;
+                                const numVal = parseInt(val) || 0;
+                                setTransferFormData({ 
+                                  ...transferFormData, 
+                                  transfer_units: val,
+                                  transfer_packages: numVal > 0 ? "" : transferFormData.transfer_packages // Clear packages only if units > 0
+                                });
+                              }}
+                              placeholder="0"
+                              min="0"
+                              disabled={!!transferFormData.transfer_packages && parseInt(transferFormData.transfer_packages) > 0}
+                            />
+                          </div>
+                          {selectedTicketForTransfer.default_quantity_per_package && (
+                            <div className="space-y-2">
+                              <Label>מספר חבילות</Label>
+                              <Input
+                                type="number"
+                                value={transferFormData.transfer_packages}
+                                onChange={(e) => {
+                                  const val = e.target.value;
+                                  const numVal = parseInt(val) || 0;
+                                  setTransferFormData({ 
+                                    ...transferFormData, 
+                                    transfer_packages: val,
+                                    transfer_units: numVal > 0 ? "" : transferFormData.transfer_units // Clear units only if packages > 0
+                                  });
+                                }}
+                                placeholder="0"
+                                min="0"
+                                disabled={!!transferFormData.transfer_units && parseInt(transferFormData.transfer_units) > 0}
+                              />
+                              {selectedTicketForTransfer.default_quantity_per_package && (
+                                <p className="text-xs text-muted-foreground">
+                                  {transferFormData.transfer_packages ? 
+                                    `סה"כ: ${(parseInt(transferFormData.transfer_packages) || 0) * selectedTicketForTransfer.default_quantity_per_package} יחידות` :
+                                    `${selectedTicketForTransfer.default_quantity_per_package} יחידות בחבילה`
+                                  }
+                                </p>
+                              )}
+                            </div>
+                          )}
+                        </div>
                         <p className="text-xs text-slate-500">
-                          מקסימום: {maxTransfer} כרטיסים
+                          מקסימום: {maxTransfer} יחידות
                         </p>
                       </div>
                       
-                      {/* is_opened checkbox removed from UI - now internal only */}
-                      
-                      {transferFormData.quantity && (
+                      {(transferFormData.transfer_units || transferFormData.transfer_packages) && (
                         <div className="p-4 bg-amber-50 dark:bg-amber-900/30 border-2 border-amber-300 dark:border-amber-700 rounded-lg">
                           <div className="flex gap-3 items-start">
                             <AlertTriangle className="h-6 w-6 text-orange-600 dark:text-orange-400 mt-0.5 flex-shrink-0" />
@@ -2117,20 +2145,33 @@ export default function Inventory() {
           <DialogFooter>
             <Button variant="outline" onClick={() => {
               setTransferDialogOpen(false);
-              setTransferFormData({ ticketId: "", quantity: "" });
+              setTransferFormData({ ticketId: "", transfer_units: "", transfer_packages: "" });
             }}>
               ביטול
             </Button>
             <Button
               onClick={async () => {
-                if (!transferFormData.ticketId || !transferFormData.quantity) {
-                  alert('אנא בחר כרטיס והזן כמות');
+                if (!transferFormData.ticketId) {
+                  alert('אנא בחר כרטיס');
                   return;
                 }
                 
-                const quantity = parseInt(transferFormData.quantity);
+                // Calculate quantity from units or packages
+                const selectedTicketForTransfer = tickets.find(t => t.id === transferFormData.ticketId);
+                if (!selectedTicketForTransfer) {
+                  alert('כרטיס לא נמצא');
+                  return;
+                }
+                
+                let quantity = 0;
+                if (transferFormData.transfer_units) {
+                  quantity = parseInt(transferFormData.transfer_units) || 0;
+                } else if (transferFormData.transfer_packages && selectedTicketForTransfer.default_quantity_per_package) {
+                  quantity = (parseInt(transferFormData.transfer_packages) || 0) * selectedTicketForTransfer.default_quantity_per_package;
+                }
+                
                 if (quantity <= 0) {
-                  alert('הכמות חייבת להיות גדולה מ-0');
+                  alert('אנא הזן כמות להעברה (יחידות או חבילות)');
                   return;
                 }
                 
@@ -2145,12 +2186,6 @@ export default function Inventory() {
                 try {
                   if (!currentKiosk?.id) {
                     alert('לא ניתן להעביר מלאי ללא קיוסק נבחר');
-                    return;
-                  }
-                  
-                  const selectedTicketForTransfer = tickets.find(t => t.id === transferFormData.ticketId);
-                  if (!selectedTicketForTransfer) {
-                    alert('כרטיס לא נמצא');
                     return;
                   }
                   
@@ -2195,7 +2230,7 @@ export default function Inventory() {
                   queryClient.invalidateQueries({ queryKey: ['tickets-active'] });
                   
                   setTransferDialogOpen(false);
-                  setTransferFormData({ ticketId: "", quantity: "" });
+                  setTransferFormData({ ticketId: "", transfer_units: "", transfer_packages: "" });
                 } catch (error) {
                   console.error('Error transferring inventory:', error);
                   alert('שגיאה בהעברת המלאי: ' + (error.message || 'שגיאה לא ידועה'));
@@ -2203,8 +2238,9 @@ export default function Inventory() {
               }}
               disabled={
                 !transferFormData.ticketId || 
-                !transferFormData.quantity || 
-                parseInt(transferFormData.quantity) <= 0 ||
+                (!transferFormData.transfer_units && !transferFormData.transfer_packages) ||
+                (transferFormData.transfer_units && parseInt(transferFormData.transfer_units) <= 0) ||
+                (transferFormData.transfer_packages && parseInt(transferFormData.transfer_packages) <= 0) ||
                 (user?.role === 'assistant' && (!canTransferVaultToCounter || !canViewVault))
               }
               className="bg-theme-gradient"

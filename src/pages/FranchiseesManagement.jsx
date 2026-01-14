@@ -441,7 +441,7 @@ export default function FranchiseesManagement() {
                 onValueChange={(value) => setFormData({ ...formData, kiosk_id: value === "none" ? "" : value })}
               >
                 <SelectTrigger>
-                  <SelectValue placeholder="בחר קיוסק (אופציונלי)" />
+                  <SelectValue placeholder="בחר קיוסק (לא חובה)" />
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="none">ללא קיוסק</SelectItem>

@@ -205,55 +205,106 @@ export default function SellerPOS() {
   }, [cartItems]);
 
   const handleConfirmSale = async (paymentMethod, notes) => {
-    setIsProcessing(true);
+    // Save values before clearing cart
+    const saleTotal = calculateTotal;
+    const currentCartItems = { ...cartItems };
     
+    // Prepare sale items
+    const items = Object.entries(currentCartItems).map(([ticketId, item]) => ({
+      ticket_type_id: ticketId,
+      ticket_name: item.ticketName,
+      quantity: item.quantity,
+      unit_price: item.unitPrice,
+      total: item.quantity * item.unitPrice,
+    }));
+
+    if (!currentKiosk?.id) {
+      throw new Error('לא ניתן ליצור מכירה ללא קיוסק נבחר');
+    }
+
+    // Validate stock before proceeding (throw errors immediately if validation fails)
+    let stockValidation;
     try {
-      // Prepare sale items
-      const items = Object.entries(cartItems).map(([ticketId, item]) => ({
-        ticket_type_id: ticketId,
-        ticket_name: item.ticketName,
-        quantity: item.quantity,
-        unit_price: item.unitPrice,
-        total: item.quantity * item.unitPrice,
-      }));
-
-      // Create sale
-      if (!currentKiosk?.id) {
-        throw new Error('לא ניתן ליצור מכירה ללא קיוסק נבחר');
-      }
-      
-      const sale = await Sale.create({
-        seller_id: user?.id,
-        seller_name: user?.full_name || user?.email,
-        items,
-        total_amount: calculateTotal,
-        payment_method: paymentMethod,
-        notes,
-        status: "completed",
-        kiosk_id: currentKiosk.id,
-      });
-
-      // Update inventory for each ticket (only quantity_counter)
-      for (const [ticketId, item] of Object.entries(cartItems)) {
+      stockValidation = Object.entries(currentCartItems).map(([ticketId, item]) => {
         const ticket = tickets.find(t => t.id === ticketId);
-        if (ticket) {
-          const currentQuantityCounter = ticket.quantity_counter ?? 0;
-          const currentQuantityVault = ticket.quantity_vault ?? 0;
+        if (!ticket) {
+          throw new Error(`כרטיס ${item.ticketName} לא נמצא`);
+        }
+        const currentQuantityCounter = ticket.quantity_counter ?? 0;
+        if (currentQuantityCounter < item.quantity) {
+          throw new Error(`לא מספיק מלאי עבור ${ticket.name}. זמין: ${currentQuantityCounter}, נדרש: ${item.quantity}`);
+        }
+        return { ticketId, ticket, item, currentQuantityCounter };
+      });
+    } catch (validationError) {
+      // If validation fails, don't proceed with optimistic update
+      setIsProcessing(false);
+      throw validationError;
+    }
+
+    // Save current state for rollback
+    const previousState = {
+      cartItems: currentCartItems,
+      tickets: tickets.map(t => ({
+        id: t.id,
+        quantity_counter: t.quantity_counter ?? 0,
+        quantity_vault: t.quantity_vault ?? 0,
+      })),
+    };
+
+    // OPTIMISTIC UPDATE: Update UI immediately
+    // Update local tickets state optimistically
+    const optimisticTickets = tickets.map(t => {
+      const cartItem = currentCartItems[t.id];
+      if (cartItem) {
+        return {
+          ...t,
+          quantity_counter: (t.quantity_counter ?? 0) - cartItem.quantity,
+        };
+      }
+      return t;
+    });
+
+    // Update React Query cache optimistically
+    queryClient.setQueryData(['tickets-active', currentKiosk.id], optimisticTickets);
+    
+    // Clear cart immediately
+    setCartItems({});
+    setIsProcessing(false);
+    setSaleCompleted(true);
+
+    // Process sale in background (non-blocking)
+    (async () => {
+      try {
+        // Create sale
+        const sale = await Sale.create({
+          seller_id: user?.id,
+          seller_name: user?.full_name || user?.email,
+          items,
+          total_amount: saleTotal,
+          payment_method: paymentMethod,
+          notes,
+          status: "completed",
+          kiosk_id: currentKiosk.id,
+        });
+
+        // Update inventory in parallel for all tickets
+        const inventoryUpdates = stockValidation.map(({ ticketId, ticket, item, currentQuantityCounter }) => {
           const newQuantityCounter = currentQuantityCounter - item.quantity;
+          const currentQuantityVault = ticket.quantity_vault ?? 0;
           
-          if (newQuantityCounter < 0) {
-            throw new Error(`לא מספיק מלאי עבור ${ticket.name}. זמין: ${currentQuantityCounter}, נדרש: ${item.quantity}`);
-          }
-          
-          // Preserve all existing values when updating
-          await TicketType.update(ticketId, {
+          return TicketType.update(ticketId, {
             quantity_counter: newQuantityCounter,
             quantity_vault: currentQuantityVault,
           }, currentKiosk.id);
+        });
 
-          // Check for stock notifications (wrap in try-catch to not fail the sale)
+        // Process notifications in parallel (non-blocking)
+        const notificationPromises = stockValidation.map(async ({ ticketId, ticket, item, currentQuantityCounter }) => {
           try {
-            // Check for out of stock notification (quantity_counter = 0)
+            const newQuantityCounter = currentQuantityCounter - item.quantity;
+            
+            // Check for out of stock notification
             if (newQuantityCounter === 0) {
               const existingOutOfStockNotifs = await Notification.filter({
                 ticket_type_id: ticketId,
@@ -269,13 +320,10 @@ export default function SellerPOS() {
                   threshold: ticket.min_threshold,
                   notification_type: "out_of_stock",
                 });
-                queryClient.invalidateQueries({ queryKey: ['notifications-all'] });
-                queryClient.invalidateQueries({ queryKey: ['notifications-unread'] });
               }
             }
-            // Check for low stock notification (quantity_counter > 0 but <= threshold)
+            // Check for low stock notification
             else if (newQuantityCounter <= ticket.min_threshold && newQuantityCounter > 0) {
-              // Check if notification already exists
               const existingLowStockNotifs = await Notification.filter({
                 ticket_type_id: ticketId,
                 is_read: false,
@@ -290,49 +338,52 @@ export default function SellerPOS() {
                   threshold: ticket.min_threshold,
                   notification_type: "low_stock",
                 });
-                queryClient.invalidateQueries({ queryKey: ['notifications-all'] });
-                queryClient.invalidateQueries({ queryKey: ['notifications-unread'] });
               }
             }
           } catch (notificationError) {
-            // Log error but don't fail the sale
             console.error("Error creating stock notification:", notificationError);
           }
-        }
-      }
-
-      // Create audit log (wrap in try-catch to not fail the sale)
-      try {
-        await AuditLog.create({
-          action: "create_sale",
-          actor_id: user?.id,
-          actor_name: user?.full_name || user?.email,
-          target_id: sale.id,
-          target_type: "Sale",
-          details: { items, total: calculateTotal, payment_method: paymentMethod },
-          kiosk_id: currentKiosk?.id,
         });
-      } catch (auditError) {
-        // Log error but don't fail the sale
-        console.error("Error creating audit log:", auditError);
-      }
 
-      // Clear cart and refresh data
-      setCartItems({});
-      queryClient.invalidateQueries({ queryKey: ['tickets-active'] });
-      queryClient.invalidateQueries({ queryKey: ['notifications-unread'] });
-      queryClient.invalidateQueries({ queryKey: ['notifications-all'] });
-      
-      setIsProcessing(false);
-      setSaleCompleted(true); // Mark that sale was completed
-      
-      return true;
-    } catch (error) {
-      console.error("Error creating sale:", error);
-      console.error("Error creating sale:", error);
-      setIsProcessing(false);
-      return false;
-    }
+        // Execute all operations in parallel
+        await Promise.all([
+          ...inventoryUpdates,
+          ...notificationPromises,
+          // Create audit log (non-blocking)
+          AuditLog.create({
+            action: "create_sale",
+            actor_id: user?.id,
+            actor_name: user?.full_name || user?.email,
+            target_id: sale.id,
+            target_type: "Sale",
+            details: { items, total: saleTotal, payment_method: paymentMethod },
+            kiosk_id: currentKiosk?.id,
+          }).catch(auditError => {
+            console.error("Error creating audit log:", auditError);
+          }),
+        ]);
+
+        // Refresh data in background
+        queryClient.invalidateQueries({ queryKey: ['tickets-active'] });
+        queryClient.invalidateQueries({ queryKey: ['notifications-unread'] });
+        queryClient.invalidateQueries({ queryKey: ['notifications-all'] });
+        queryClient.invalidateQueries({ queryKey: ['sales-for-demand'] });
+
+      } catch (error) {
+        console.error("Error processing sale in background:", error);
+        
+        // ROLLBACK: Restore previous state on error
+        setCartItems(previousState.cartItems);
+        queryClient.setQueryData(['tickets-active', currentKiosk.id], previousState.tickets);
+        queryClient.invalidateQueries({ queryKey: ['tickets-active'] });
+        
+        // Show error to user (you might want to add a toast here)
+        alert(`שגיאה בעיבוד המכירה: ${error.message}`);
+        setSaleCompleted(false);
+      }
+    })();
+
+    return true;
   };
 
   const isOwner = user?.position === 'owner' || user?.role === 'admin';

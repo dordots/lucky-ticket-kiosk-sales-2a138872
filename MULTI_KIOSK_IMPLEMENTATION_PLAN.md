@@ -90,7 +90,7 @@
 ```javascript
 {
   id: "log_id",
-  kiosk_id: "kiosk_id", // חדש - אופציונלי (לפעולות כלליות)
+  kiosk_id: "kiosk_id", // חדש - לא חובה (לפעולות כלליות)
   user_id: "user_id",
   // ... שאר השדות הקיימים
 }

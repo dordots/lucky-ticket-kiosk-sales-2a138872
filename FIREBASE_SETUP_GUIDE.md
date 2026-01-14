@@ -11,7 +11,7 @@
    - הזן שם לפרויקט (לדוגמה: "lucky-ticket-kiosk")
    - לחץ **"Continue"**
 
-3. **הגדרת Google Analytics (אופציונלי):**
+3. **הגדרת Google Analytics (לא חובה):**
    - תוכל לבחור אם להפעיל Google Analytics
    - אם לא, בחר **"Not now"** או **"Disable"**
    - לחץ **"Create project"**

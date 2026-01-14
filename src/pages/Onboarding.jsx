@@ -369,7 +369,7 @@ export default function Onboarding() {
                       <CheckCircle className="h-8 w-8 mx-auto mb-2 text-purple-600" />
                       <h3 className="font-semibold mb-1">הגדרת עמלה</h3>
                       <p className="text-sm text-muted-foreground">
-                        נגדיר את גובה העמלה שלכם (אופציונלי)
+                        נגדיר את גובה העמלה שלכם (לא חובה)
                       </p>
                     </div>
                     <div className="text-center p-4 rounded-lg bg-green-50 dark:bg-green-900/20">
