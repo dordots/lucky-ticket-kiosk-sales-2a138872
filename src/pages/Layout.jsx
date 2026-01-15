@@ -46,6 +46,19 @@ import {
 function NotificationBell({ currentKiosk, user }) {
   const navigate = useNavigate();
   
+  // Check permissions - only franchisee or users with inventory view permission
+  const hasPermission = (perm) => {
+    if (!user) return false;
+    if (user.role !== 'assistant') return true;
+    if (!perm) return true;
+    return Array.isArray(user.permissions) ? user.permissions.includes(perm) : false;
+  };
+
+  const canViewInventory = user?.role === 'franchisee' || 
+    user?.role === 'owner' ||
+    user?.role === 'admin' ||
+    (user?.role === 'assistant' && hasPermission('inventory_view_counter') && hasPermission('inventory_view_vault'));
+  
   // Query to get tickets and calculate active notifications
   const { data: tickets = [] } = useQuery({
     queryKey: ['tickets-for-notifications-layout', currentKiosk?.id],
@@ -58,7 +71,7 @@ function NotificationBell({ currentKiosk, user }) {
         return [];
       }
     },
-    enabled: !!currentKiosk?.id && !!user && user?.role !== 'system_manager',
+    enabled: !!currentKiosk?.id && !!user && user?.role !== 'system_manager' && canViewInventory,
     refetchInterval: 10000, // Refetch every 10 seconds to catch inventory changes
   });
 
@@ -86,8 +99,8 @@ function NotificationBell({ currentKiosk, user }) {
     return count;
   }, [tickets, currentKiosk]);
 
-  // Don't show bell for system managers or if no kiosk
-  if (user?.role === 'system_manager' || !currentKiosk) {
+  // Don't show bell for system managers, if no kiosk, or if no permission
+  if (user?.role === 'system_manager' || !currentKiosk || !canViewInventory) {
     return null;
   }
 

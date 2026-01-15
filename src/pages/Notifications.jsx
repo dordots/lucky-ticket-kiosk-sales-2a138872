@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from "react";
-import { auth } from "@/api/entities";
-import { useQuery } from "@tanstack/react-query";
+import { auth, TicketType, AuditLog } from "@/api/entities";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
 import { createPageUrl } from "@/utils";
 import { format } from "date-fns";
@@ -12,11 +12,17 @@ import {
   Bell, 
   AlertTriangle, 
   Package, 
-  ArrowLeft
+  ArrowLeft,
+  Plus,
+  ArrowRight
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 const notificationTypes = {
   out_of_stock: {
@@ -38,6 +44,14 @@ const notificationTypes = {
 export default function Notifications() {
   const { currentKiosk } = useKiosk();
   const [user, setUser] = useState(null);
+  const [updateStockDialogOpen, setUpdateStockDialogOpen] = useState(false);
+  const [selectedNotification, setSelectedNotification] = useState(null);
+  const [updateStockFormData, setUpdateStockFormData] = useState({
+    action: "add", // "add" or "transfer"
+    units: "",
+    packages: "",
+  });
+  const queryClient = useQueryClient();
 
   useEffect(() => {
     const loadUser = async () => {
@@ -59,9 +73,11 @@ export default function Notifications() {
   };
 
   // Check if user has permission to view inventory (needed for notifications)
-  const canViewInventory = user?.role !== 'assistant' || 
-    hasPermission('inventory_view_counter') || 
-    hasPermission('inventory_view_vault');
+  // Only franchisee, owner, admin, or assistants with both inventory view permissions
+  const canViewInventory = user?.role === 'franchisee' || 
+    user?.role === 'owner' ||
+    user?.role === 'admin' ||
+    (user?.role === 'assistant' && hasPermission('inventory_view_counter') && hasPermission('inventory_view_vault'));
 
   // Permission guard - only users with inventory view permission can see notifications
   if (user && !canViewInventory) {
@@ -212,14 +228,49 @@ export default function Notifications() {
                       </div>
                     </div>
                     
-                    <div className="mt-4 pt-4 border-t border-border">
-                      <Link to={createPageUrl("Inventory")}>
-                        <Button variant="outline" size="sm">
-                          עדכן מלאי
-                          <ArrowLeft className="h-4 w-4 mr-2" />
-                        </Button>
-                      </Link>
-                    </div>
+                    {(() => {
+                      // Check if user has any permission to update stock
+                      const canAddStockCounter = user?.role !== 'assistant' || hasPermission('inventory_add_stock_counter');
+                      const canTransferVaultToCounter = user?.role !== 'assistant' || hasPermission('inventory_transfer_vault_to_counter');
+                      const hasAnyUpdatePermission = canAddStockCounter || (canTransferVaultToCounter && notification.quantity_vault > 0);
+                      
+                      // Only show button if user has at least one permission
+                      if (!hasAnyUpdatePermission) {
+                        return null;
+                      }
+                      
+                      return (
+                        <div className="mt-4 pt-4 border-t border-border">
+                          <Button 
+                            variant="outline" 
+                            size="sm"
+                            onClick={() => {
+                              const ticket = tickets.find(t => t.id === notification.ticket_id);
+                              if (!ticket) return;
+                              
+                              // Determine available actions based on permissions
+                              let defaultAction = "add";
+                              if (canTransferVaultToCounter && notification.quantity_vault > 0) {
+                                defaultAction = "transfer";
+                              } else if (canAddStockCounter) {
+                                defaultAction = "add";
+                              }
+                              
+                              setSelectedNotification(notification);
+                              setUpdateStockFormData({
+                                action: defaultAction,
+                                units: "",
+                                packages: "",
+                              });
+                              setUpdateStockDialogOpen(true);
+                            }}
+                          >
+                            עדכן מלאי
+                            <ArrowLeft className="h-4 w-4 mr-2" />
+                          </Button>
+                        </div>
+                      );
+                    })()}
                   </CardContent>
                 </Card>
               </motion.div>
@@ -235,6 +286,511 @@ export default function Notifications() {
           </div>
         )}
       </div>
+
+      {/* Update Stock Dialog */}
+      <Dialog open={updateStockDialogOpen} onOpenChange={setUpdateStockDialogOpen}>
+        <DialogContent className="max-w-[calc(100vw-2rem)] sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>
+              {selectedNotification && (() => {
+                const ticket = tickets.find(t => t.id === selectedNotification.ticket_id);
+                return `עדכון מלאי - ${selectedNotification.ticket_name}`;
+              })()}
+            </DialogTitle>
+          </DialogHeader>
+          
+          {selectedNotification && (() => {
+            const ticket = tickets.find(t => t.id === selectedNotification.ticket_id);
+            if (!ticket) return null;
+            
+            const defaultQtyPerPackage = ticket.default_quantity_per_package || 1;
+            const canAddStockCounter = user?.role !== 'assistant' || hasPermission('inventory_add_stock_counter');
+            const canTransferVaultToCounter = user?.role !== 'assistant' || hasPermission('inventory_transfer_vault_to_counter');
+            
+            // Determine which actions are available
+            const availableActions = [];
+            if (canAddStockCounter) availableActions.push('add');
+            if (canTransferVaultToCounter && selectedNotification.quantity_vault > 0) availableActions.push('transfer');
+            
+            // Set default action if current action is not available
+            if (availableActions.length > 0 && !availableActions.includes(updateStockFormData.action)) {
+              setUpdateStockFormData({ ...updateStockFormData, action: availableActions[0], units: "", packages: "" });
+            }
+            
+            // If no actions available, show message
+            if (availableActions.length === 0) {
+              return (
+                <div className="p-4 bg-muted rounded-lg text-center">
+                  <p className="text-sm text-muted-foreground">אין לך הרשאה לעדכן מלאי</p>
+                </div>
+              );
+            }
+            
+            return (
+              <div className="space-y-4">
+                <div className="p-3 bg-accent rounded-lg">
+                  <div className="text-sm text-muted-foreground mb-1">כרטיס נבחר</div>
+                  <div className="text-sm font-semibold">{selectedNotification.ticket_name}</div>
+                  {defaultQtyPerPackage > 1 && (
+                    <div className="text-xs text-muted-foreground mt-1">
+                      כמות בכל חבילה: {defaultQtyPerPackage} כרטיסים
+                    </div>
+                  )}
+                  <div className="text-xs text-muted-foreground mt-1">
+                    מלאי בדלפק: {selectedNotification.current_quantity} | מלאי בכספת: {selectedNotification.quantity_vault || 0}
+                  </div>
+                </div>
+
+                {availableActions.length > 1 ? (
+                  <Tabs value={updateStockFormData.action} onValueChange={(value) => setUpdateStockFormData({ ...updateStockFormData, action: value, units: "", packages: "" })}>
+                    <TabsList className="grid w-full" style={{ gridTemplateColumns: `repeat(${availableActions.length}, 1fr)` }}>
+                      {canAddStockCounter && (
+                        <TabsTrigger value="add">
+                          הוסף מלאי
+                        </TabsTrigger>
+                      )}
+                      {canTransferVaultToCounter && selectedNotification.quantity_vault > 0 && (
+                        <TabsTrigger value="transfer">
+                          העבר מכספת
+                        </TabsTrigger>
+                      )}
+                    </TabsList>
+                  
+                    {canAddStockCounter && (
+                      <TabsContent value="add" className="space-y-4 mt-4">
+                    <div className="space-y-2">
+                      <Label>מספר יחידות</Label>
+                      <Input
+                        type="number"
+                        value={updateStockFormData.units}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          const numVal = parseInt(val) || 0;
+                          setUpdateStockFormData({ 
+                            ...updateStockFormData, 
+                            units: val,
+                            packages: numVal > 0 ? "" : updateStockFormData.packages
+                          });
+                        }}
+                        placeholder="0"
+                        min="0"
+                        disabled={!!updateStockFormData.packages && parseInt(updateStockFormData.packages) > 0}
+                      />
+                    </div>
+                    
+                    {defaultQtyPerPackage > 1 && (
+                      <div className="space-y-2">
+                        <Label>מספר חבילות</Label>
+                        <Input
+                          type="number"
+                          value={updateStockFormData.packages}
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            const numVal = parseInt(val) || 0;
+                            setUpdateStockFormData({ 
+                              ...updateStockFormData, 
+                              packages: val,
+                              units: numVal > 0 ? "" : updateStockFormData.units
+                            });
+                          }}
+                          placeholder="0"
+                          min="0"
+                          disabled={!!updateStockFormData.units && parseInt(updateStockFormData.units) > 0}
+                        />
+                        {updateStockFormData.packages && (
+                          <p className="text-sm text-muted-foreground">
+                            סה"כ כרטיסים: <strong>{parseInt(updateStockFormData.packages || 0) * defaultQtyPerPackage}</strong>
+                          </p>
+                        )}
+                      </div>
+                    )}
+                    
+                    {updateStockFormData.units || updateStockFormData.packages ? (
+                      <div className="p-4 bg-amber-50 dark:bg-amber-900/30 border-2 border-amber-300 dark:border-amber-700 rounded-lg">
+                        <div className="flex gap-3 items-start">
+                          <AlertTriangle className="h-6 w-6 text-orange-600 dark:text-orange-400 mt-0.5 flex-shrink-0" />
+                          <div className="text-base font-semibold text-orange-800 dark:text-orange-200">
+                            שימו לב! יש לפתוח את החבילה החדשה באלטורה
+                          </div>
+                        </div>
+                      </div>
+                    ) : null}
+                    </TabsContent>
+                  )}
+                  
+                  {canTransferVaultToCounter && selectedNotification.quantity_vault > 0 && (
+                    <TabsContent value="transfer" className="space-y-4 mt-4">
+                    {selectedNotification.quantity_vault === 0 ? (
+                      <div className="p-4 bg-muted rounded-lg text-center">
+                        <p className="text-sm text-muted-foreground">אין מלאי בכספת להעברה</p>
+                      </div>
+                    ) : (
+                      <>
+                        <div className="p-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
+                          <p className="text-sm font-medium text-foreground mb-1">
+                            זמין בכספת: {selectedNotification.quantity_vault} יחידות
+                          </p>
+                          <p className="text-xs text-muted-foreground">
+                            העברת מלאי מהכספת לדלפק
+                          </p>
+                        </div>
+                        
+                        <div className="space-y-2">
+                          <Label>מספר חבילות להעברה</Label>
+                          <Input
+                            type="number"
+                            value={updateStockFormData.packages}
+                            onChange={(e) => {
+                              const val = e.target.value;
+                              const numVal = parseInt(val) || 0;
+                              const maxPackages = Math.floor(selectedNotification.quantity_vault / defaultQtyPerPackage);
+                              if (val === "" || (numVal >= 0 && numVal <= maxPackages)) {
+                                setUpdateStockFormData({ 
+                                  ...updateStockFormData, 
+                                  packages: val,
+                                  units: numVal > 0 ? "" : updateStockFormData.units
+                                });
+                              }
+                            }}
+                            placeholder="0"
+                            min="0"
+                            max={defaultQtyPerPackage > 1 ? Math.floor(selectedNotification.quantity_vault / defaultQtyPerPackage) : selectedNotification.quantity_vault}
+                            disabled={!!updateStockFormData.units && parseInt(updateStockFormData.units) > 0}
+                          />
+                          {defaultQtyPerPackage > 1 && (
+                            <p className="text-xs text-muted-foreground">
+                              מקסימום: {Math.floor(selectedNotification.quantity_vault / defaultQtyPerPackage)} חבילות
+                            </p>
+                          )}
+                        </div>
+                        
+                        <div className="space-y-2">
+                          <Label>מספר יחידות להעברה</Label>
+                          <Input
+                            type="number"
+                            value={updateStockFormData.units}
+                            onChange={(e) => {
+                              const val = e.target.value;
+                              const numVal = parseInt(val) || 0;
+                              if (val === "" || (numVal >= 0 && numVal <= selectedNotification.quantity_vault)) {
+                                setUpdateStockFormData({ 
+                                  ...updateStockFormData, 
+                                  units: val,
+                                  packages: numVal > 0 ? "" : updateStockFormData.packages
+                                });
+                              }
+                            }}
+                            placeholder="0"
+                            min="0"
+                            max={selectedNotification.quantity_vault}
+                            disabled={!!updateStockFormData.packages && parseInt(updateStockFormData.packages) > 0}
+                          />
+                          <p className="text-xs text-muted-foreground">
+                            מקסימום: {selectedNotification.quantity_vault} יחידות
+                          </p>
+                        </div>
+                        
+                        {updateStockFormData.units || updateStockFormData.packages ? (
+                          <div className="p-4 bg-amber-50 dark:bg-amber-900/30 border-2 border-amber-300 dark:border-amber-700 rounded-lg">
+                            <div className="flex gap-3 items-start">
+                              <AlertTriangle className="h-6 w-6 text-orange-600 dark:text-orange-400 mt-0.5 flex-shrink-0" />
+                              <div className="text-base font-semibold text-orange-800 dark:text-orange-200">
+                                שימו לב! יש לפתוח את החבילה החדשה באלטורה
+                              </div>
+                            </div>
+                          </div>
+                        ) : null}
+                      </>
+                    )}
+                  </TabsContent>
+                  )}
+                </Tabs>
+                ) : (
+                  // If only one action is available, show it directly without tabs
+                  <div className="space-y-4">
+                    {updateStockFormData.action === "add" && canAddStockCounter && (
+                      <>
+                        <div className="space-y-2">
+                          <Label>מספר יחידות</Label>
+                          <Input
+                            type="number"
+                            value={updateStockFormData.units}
+                            onChange={(e) => {
+                              const val = e.target.value;
+                              const numVal = parseInt(val) || 0;
+                              setUpdateStockFormData({ 
+                                ...updateStockFormData, 
+                                units: val,
+                                packages: numVal > 0 ? "" : updateStockFormData.packages
+                              });
+                            }}
+                            placeholder="0"
+                            min="0"
+                            disabled={!!updateStockFormData.packages && parseInt(updateStockFormData.packages) > 0}
+                          />
+                        </div>
+                        
+                        {defaultQtyPerPackage > 1 && (
+                          <div className="space-y-2">
+                            <Label>מספר חבילות</Label>
+                            <Input
+                              type="number"
+                              value={updateStockFormData.packages}
+                              onChange={(e) => {
+                                const val = e.target.value;
+                                const numVal = parseInt(val) || 0;
+                                setUpdateStockFormData({ 
+                                  ...updateStockFormData, 
+                                  packages: val,
+                                  units: numVal > 0 ? "" : updateStockFormData.units
+                                });
+                              }}
+                              placeholder="0"
+                              min="0"
+                              disabled={!!updateStockFormData.units && parseInt(updateStockFormData.units) > 0}
+                            />
+                            {updateStockFormData.packages && (
+                              <p className="text-sm text-muted-foreground">
+                                סה"כ כרטיסים: <strong>{parseInt(updateStockFormData.packages || 0) * defaultQtyPerPackage}</strong>
+                              </p>
+                            )}
+                          </div>
+                        )}
+                        
+                        {updateStockFormData.units || updateStockFormData.packages ? (
+                          <div className="p-4 bg-amber-50 dark:bg-amber-900/30 border-2 border-amber-300 dark:border-amber-700 rounded-lg">
+                            <div className="flex gap-3 items-start">
+                              <AlertTriangle className="h-6 w-6 text-orange-600 dark:text-orange-400 mt-0.5 flex-shrink-0" />
+                              <div className="text-base font-semibold text-orange-800 dark:text-orange-200">
+                                שימו לב! יש לפתוח את החבילה החדשה באלטורה
+                              </div>
+                            </div>
+                          </div>
+                        ) : null}
+                      </>
+                    )}
+                    
+                    {updateStockFormData.action === "transfer" && canTransferVaultToCounter && selectedNotification.quantity_vault > 0 && (
+                      <>
+                        <div className="p-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
+                          <p className="text-sm font-medium text-foreground mb-1">
+                            זמין בכספת: {selectedNotification.quantity_vault} יחידות
+                          </p>
+                          <p className="text-xs text-muted-foreground">
+                            העברת מלאי מהכספת לדלפק
+                          </p>
+                        </div>
+                        
+                        <div className="space-y-2">
+                          <Label>מספר חבילות להעברה</Label>
+                          <Input
+                            type="number"
+                            value={updateStockFormData.packages}
+                            onChange={(e) => {
+                              const val = e.target.value;
+                              const numVal = parseInt(val) || 0;
+                              const maxPackages = Math.floor(selectedNotification.quantity_vault / defaultQtyPerPackage);
+                              if (val === "" || (numVal >= 0 && numVal <= maxPackages)) {
+                                setUpdateStockFormData({ 
+                                  ...updateStockFormData, 
+                                  packages: val,
+                                  units: numVal > 0 ? "" : updateStockFormData.units
+                                });
+                              }
+                            }}
+                            placeholder="0"
+                            min="0"
+                            max={defaultQtyPerPackage > 1 ? Math.floor(selectedNotification.quantity_vault / defaultQtyPerPackage) : selectedNotification.quantity_vault}
+                            disabled={!!updateStockFormData.units && parseInt(updateStockFormData.units) > 0}
+                          />
+                          {defaultQtyPerPackage > 1 && (
+                            <p className="text-xs text-muted-foreground">
+                              מקסימום: {Math.floor(selectedNotification.quantity_vault / defaultQtyPerPackage)} חבילות
+                            </p>
+                          )}
+                        </div>
+                        
+                        <div className="space-y-2">
+                          <Label>מספר יחידות להעברה</Label>
+                          <Input
+                            type="number"
+                            value={updateStockFormData.units}
+                            onChange={(e) => {
+                              const val = e.target.value;
+                              const numVal = parseInt(val) || 0;
+                              if (val === "" || (numVal >= 0 && numVal <= selectedNotification.quantity_vault)) {
+                                setUpdateStockFormData({ 
+                                  ...updateStockFormData, 
+                                  units: val,
+                                  packages: numVal > 0 ? "" : updateStockFormData.packages
+                                });
+                              }
+                            }}
+                            placeholder="0"
+                            min="0"
+                            max={selectedNotification.quantity_vault}
+                            disabled={!!updateStockFormData.packages && parseInt(updateStockFormData.packages) > 0}
+                          />
+                          <p className="text-xs text-muted-foreground">
+                            מקסימום: {selectedNotification.quantity_vault} יחידות
+                          </p>
+                        </div>
+                        
+                        {updateStockFormData.units || updateStockFormData.packages ? (
+                          <div className="p-4 bg-amber-50 dark:bg-amber-900/30 border-2 border-amber-300 dark:border-amber-700 rounded-lg">
+                            <div className="flex gap-3 items-start">
+                              <AlertTriangle className="h-6 w-6 text-orange-600 dark:text-orange-400 mt-0.5 flex-shrink-0" />
+                              <div className="text-base font-semibold text-orange-800 dark:text-orange-200">
+                                שימו לב! יש לפתוח את החבילה החדשה באלטורה
+                              </div>
+                            </div>
+                          </div>
+                        ) : null}
+                      </>
+                    )}
+                  </div>
+                )}
+              </div>
+            );
+          })()}
+          
+          <DialogFooter>
+            <Button variant="outline" onClick={() => {
+              setUpdateStockDialogOpen(false);
+              setSelectedNotification(null);
+              setUpdateStockFormData({ action: "add", units: "", packages: "" });
+            }}>
+              ביטול
+            </Button>
+            <Button
+              onClick={async () => {
+                if (!selectedNotification || !currentKiosk?.id) return;
+                
+                const ticket = tickets.find(t => t.id === selectedNotification.ticket_id);
+                if (!ticket) {
+                  alert('כרטיס לא נמצא');
+                  return;
+                }
+                
+                const defaultQtyPerPackage = ticket.default_quantity_per_package || 1;
+                const unitsValue = parseInt(updateStockFormData.units) || 0;
+                const packagesValue = parseInt(updateStockFormData.packages) || 0;
+                
+                if (unitsValue === 0 && packagesValue === 0) {
+                  alert('אנא הזן מספר יחידות או מספר חבילות');
+                  return;
+                }
+                
+                let quantity = 0;
+                if (unitsValue > 0) {
+                  quantity = unitsValue;
+                } else if (packagesValue > 0) {
+                  quantity = packagesValue * defaultQtyPerPackage;
+                }
+                
+                try {
+                  const currentCounter = selectedNotification.current_quantity || 0;
+                  const currentVault = selectedNotification.quantity_vault || 0;
+                  
+                  if (updateStockFormData.action === "add") {
+                    // Add stock to counter
+                    if (user?.role === 'assistant' && !hasPermission('inventory_add_stock_counter')) {
+                      alert('אין לך הרשאה להוספת מלאי לדלפק');
+                      return;
+                    }
+                    
+                    await ticketTypesService.updateTicketType(selectedNotification.ticket_id, {
+                      quantity_counter: currentCounter + quantity,
+                      quantity_vault: currentVault,
+                    }, currentKiosk.id);
+                    
+                    await AuditLog.create({
+                      action: 'add_inventory',
+                      entity_type: 'ticketType',
+                      entity_id: selectedNotification.ticket_id,
+                      entity_name: selectedNotification.ticket_name,
+                      details: {
+                        ticket_name: selectedNotification.ticket_name,
+                        ticket_id: selectedNotification.ticket_id,
+                        quantity: quantity,
+                        destination: "counter",
+                        destination_name: "דלפק",
+                        units: unitsValue > 0 ? unitsValue : null,
+                        packages: packagesValue > 0 ? packagesValue : null,
+                        quantity_per_package: defaultQtyPerPackage > 1 ? defaultQtyPerPackage : null,
+                        quantity_before_counter: currentCounter,
+                        quantity_after_counter: currentCounter + quantity,
+                        quantity_before_vault: currentVault,
+                        quantity_after_vault: currentVault,
+                        message: `הוספו ${quantity} כרטיסים לדלפק`
+                      },
+                      user_id: user?.id,
+                      user_name: user?.full_name || user?.email,
+                    });
+                  } else {
+                    // Transfer from vault to counter
+                    if (user?.role === 'assistant' && !hasPermission('inventory_transfer_vault_to_counter')) {
+                      alert('אין לך הרשאה להעברת מלאי מכספת לדלפק');
+                      return;
+                    }
+                    
+                    if (quantity > currentVault) {
+                      alert(`לא ניתן להעביר ${quantity} כרטיסים. זמין בכספת: ${currentVault}`);
+                      return;
+                    }
+                    
+                    await ticketTypesService.updateTicketType(selectedNotification.ticket_id, {
+                      quantity_counter: currentCounter + quantity,
+                      quantity_vault: currentVault - quantity,
+                    }, currentKiosk.id);
+                    
+                    await AuditLog.create({
+                      action: 'transfer_inventory',
+                      entity_type: 'ticketType',
+                      entity_id: selectedNotification.ticket_id,
+                      entity_name: selectedNotification.ticket_name,
+                      details: {
+                        ticket_name: selectedNotification.ticket_name,
+                        ticket_id: selectedNotification.ticket_id,
+                        quantity: quantity,
+                        from: 'vault',
+                        to: 'counter',
+                        quantity_before_vault: currentVault,
+                        quantity_after_vault: currentVault - quantity,
+                        quantity_before_counter: currentCounter,
+                        quantity_after_counter: currentCounter + quantity,
+                        message: `הועברו ${quantity} כרטיסים מכספת לדלפק`
+                      },
+                      user_id: user?.id,
+                      user_name: user?.full_name || user?.email,
+                    });
+                  }
+                  
+                  queryClient.invalidateQueries({ queryKey: ['tickets-for-notifications', currentKiosk?.id] });
+                  queryClient.invalidateQueries({ queryKey: ['tickets-for-notifications-layout', currentKiosk?.id] });
+                  queryClient.invalidateQueries({ queryKey: ['tickets-inventory', currentKiosk?.id] });
+                  queryClient.invalidateQueries({ queryKey: ['tickets-active'] });
+                  
+                  setUpdateStockDialogOpen(false);
+                  setSelectedNotification(null);
+                  setUpdateStockFormData({ action: "add", units: "", packages: "" });
+                } catch (error) {
+                  console.error('Error updating stock:', error);
+                  alert('שגיאה בעדכון המלאי: ' + (error.message || 'שגיאה לא ידועה'));
+                }
+              }}
+              disabled={
+                (!updateStockFormData.units && !updateStockFormData.packages) ||
+                (updateStockFormData.units && parseInt(updateStockFormData.units) <= 0) ||
+                (updateStockFormData.packages && parseInt(updateStockFormData.packages) <= 0)
+              }
+              className="bg-theme-gradient"
+            >
+              {updateStockFormData.action === "add" ? "הוסף מלאי" : "העבר מכספת"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
