@@ -2094,25 +2094,6 @@ export default function Inventory() {
                       <div className="space-y-3">
                         <Label className="text-base font-semibold">כמות להעברה</Label>
                         <div className="grid grid-cols-2 gap-4">
-                          <div className="space-y-2">
-                            <Label>מספר יחידות</Label>
-                            <Input
-                              type="number"
-                              value={transferFormData.transfer_units}
-                              onChange={(e) => {
-                                const val = e.target.value;
-                                const numVal = parseInt(val) || 0;
-                                setTransferFormData({ 
-                                  ...transferFormData, 
-                                  transfer_units: val,
-                                  transfer_packages: numVal > 0 ? "" : transferFormData.transfer_packages // Clear packages only if units > 0
-                                });
-                              }}
-                              placeholder="0"
-                              min="0"
-                              disabled={!!transferFormData.transfer_packages && parseInt(transferFormData.transfer_packages) > 0}
-                            />
-                          </div>
                           {selectedTicketForTransfer.default_quantity_per_package && (
                             <div className="space-y-2">
                               <Label>מספר חבילות</Label>
@@ -2142,6 +2123,25 @@ export default function Inventory() {
                               )}
                             </div>
                           )}
+                          <div className="space-y-2">
+                            <Label>מספר יחידות</Label>
+                            <Input
+                              type="number"
+                              value={transferFormData.transfer_units}
+                              onChange={(e) => {
+                                const val = e.target.value;
+                                const numVal = parseInt(val) || 0;
+                                setTransferFormData({ 
+                                  ...transferFormData, 
+                                  transfer_units: val,
+                                  transfer_packages: numVal > 0 ? "" : transferFormData.transfer_packages // Clear packages only if units > 0
+                                });
+                              }}
+                              placeholder="0"
+                              min="0"
+                              disabled={!!transferFormData.transfer_packages && parseInt(transferFormData.transfer_packages) > 0}
+                            />
+                          </div>
                         </div>
                         <p className="text-xs text-slate-500">
                           מקסימום: {maxTransfer} יחידות

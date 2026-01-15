@@ -656,8 +656,7 @@ export default function SellerPOS() {
         onClose={() => {
           setPaymentOpen(false);
           setCartExpanded(false);
-          setSaleCompleted(false);
-          // Stay on the sales screen after successful sale
+          // Don't reset saleCompleted here - let it be reset after low stock alert is closed
         }}
         onConfirm={handleConfirmSale}
         total={calculateTotal}
@@ -666,7 +665,12 @@ export default function SellerPOS() {
       />
 
       {/* Low Stock Alert Dialog */}
-      <AlertDialog open={!!lowStockAlert} onOpenChange={(open) => !open && setLowStockAlert(null)}>
+      <AlertDialog open={!!lowStockAlert} onOpenChange={(open) => {
+        if (!open) {
+          setLowStockAlert(null);
+          setSaleCompleted(false); // Reset sale completed state to return to ticket grid
+        }
+      }}>
         <AlertDialogContent className="max-w-[calc(100vw-2rem)] sm:max-w-md" dir="rtl">
           <AlertDialogHeader>
             <AlertDialogTitle className="flex items-center gap-2">
@@ -698,7 +702,10 @@ export default function SellerPOS() {
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogAction onClick={() => setLowStockAlert(null)}>
+            <AlertDialogAction onClick={() => {
+              setLowStockAlert(null);
+              setSaleCompleted(false); // Reset sale completed state to return to ticket grid
+            }}>
               הבנתי
             </AlertDialogAction>
           </AlertDialogFooter>

@@ -22,6 +22,7 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 
 const STEPS = {
   WELCOME: 1,
@@ -38,6 +39,7 @@ export default function Onboarding() {
   const [commissionRate, setCommissionRate] = useState("");
   const [skipCommission, setSkipCommission] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
+  const [selectedTicketDialog, setSelectedTicketDialog] = useState(null);
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const { currentKiosk, isLoading: kioskLoading } = useKiosk();
@@ -48,9 +50,9 @@ export default function Onboarding() {
         const userData = await auth.me();
         setUser(userData);
         
-        // If user already completed onboarding, redirect to dashboard
+        // If user already completed onboarding, redirect to SellerPOS
         if (userData?.onboarding_completed) {
-          navigate('/Dashboard');
+          navigate('/SellerPOS');
         }
       } catch (e) {
         console.log("User not logged in");
@@ -229,7 +231,7 @@ export default function Onboarding() {
     onSuccess: () => {
       // Refresh user data
       auth.me().then(setUser).catch(console.error);
-      navigate('/Dashboard');
+      navigate('/SellerPOS');
     },
   });
 
@@ -447,7 +449,11 @@ export default function Onboarding() {
                         };
 
                         return (
-                          <Card key={ticket.id} className="p-1 sm:p-3 relative overflow-hidden">
+                          <Card 
+                            key={ticket.id} 
+                            className="p-1 sm:p-3 relative overflow-hidden cursor-pointer hover:shadow-md transition-shadow"
+                            onClick={() => setSelectedTicketDialog(ticket)}
+                          >
                             {/* Price Badge on Image */}
                             {ticket.image_url && (
                               <div className="relative w-full mb-1">
@@ -621,6 +627,198 @@ export default function Onboarding() {
                       </AlertDescription>
                     </Alert>
                   )}
+
+                  {/* Ticket Detail Dialog */}
+                  <Dialog open={!!selectedTicketDialog} onOpenChange={(open) => !open && setSelectedTicketDialog(null)}>
+                    <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+                      <DialogHeader>
+                        <DialogTitle className="text-2xl">{selectedTicketDialog?.name}</DialogTitle>
+                        {selectedTicketDialog?.nickname && (
+                          <p className="text-muted-foreground">"{selectedTicketDialog.nickname}"</p>
+                        )}
+                        {selectedTicketDialog?.image_url && (
+                          <div className="mt-4">
+                            <img
+                              src={selectedTicketDialog.image_url}
+                              alt={selectedTicketDialog.name}
+                              className="w-full h-48 object-cover rounded-lg"
+                              onError={(e) => {
+                                e.target.style.display = 'none';
+                              }}
+                            />
+                          </div>
+                        )}
+                      </DialogHeader>
+                      
+                      {selectedTicketDialog && (() => {
+                        const data = inventoryData[selectedTicketDialog.id] || {
+                          counter_units: "",
+                          counter_packages: "",
+                          vault_units: "",
+                          vault_packages: "",
+                        };
+                        const defaultQtyPerPackage = selectedTicketDialog.default_quantity_per_package || 1;
+                        
+                        // Calculate totals
+                        const counterUnits = parseInt(data.counter_units) || 0;
+                        const counterPackages = parseInt(data.counter_packages) || 0;
+                        const vaultUnits = parseInt(data.vault_units) || 0;
+                        const vaultPackages = parseInt(data.vault_packages) || 0;
+                        
+                        const counterTotal = counterUnits + (counterPackages * defaultQtyPerPackage);
+                        const vaultTotal = vaultUnits + (vaultPackages * defaultQtyPerPackage);
+                        const grandTotal = counterTotal + vaultTotal;
+                        const totalPackages = counterPackages + vaultPackages;
+                        const totalIndividualUnits = counterUnits + vaultUnits;
+
+                        return (
+                          <div className="space-y-6 mt-4">
+                            {/* Counter Section */}
+                            <div className="space-y-4 p-4 border rounded-lg">
+                              <h3 className="text-lg font-semibold text-foreground">דלפק</h3>
+                              <div className="grid grid-cols-2 gap-4">
+                                <div className="space-y-2">
+                                  <Label className="text-base">יחידות</Label>
+                                  <Input
+                                    type="number"
+                                    value={data.counter_units}
+                                    onChange={(e) => {
+                                      const val = e.target.value;
+                                      updateInventoryData(selectedTicketDialog.id, 'counter_units', val);
+                                    }}
+                                    placeholder="0"
+                                    min="0"
+                                    className="text-lg h-12"
+                                  />
+                                </div>
+                                {selectedTicketDialog.default_quantity_per_package && (
+                                  <div className="space-y-2">
+                                    <Label className="text-base">חבילות</Label>
+                                    <Input
+                                      type="number"
+                                      value={data.counter_packages}
+                                      onChange={(e) => {
+                                        const val = e.target.value;
+                                        updateInventoryData(selectedTicketDialog.id, 'counter_packages', val);
+                                      }}
+                                      placeholder="0"
+                                      min="0"
+                                      className="text-lg h-12"
+                                    />
+                                  </div>
+                                )}
+                              </div>
+                              {counterTotal > 0 && (
+                                <div className="mt-2 p-2 bg-accent rounded">
+                                  <p className="text-sm font-semibold">
+                                    סה"כ דלפק: {counterTotal} יחידות
+                                    {counterPackages > 0 && defaultQtyPerPackage > 1 && (
+                                      <span className="text-muted-foreground mr-2">
+                                        ({counterPackages} × {defaultQtyPerPackage})
+                                      </span>
+                                    )}
+                                  </p>
+                                </div>
+                              )}
+                            </div>
+
+                            {/* Vault Section */}
+                            <div className="space-y-4 p-4 border rounded-lg">
+                              <h3 className="text-lg font-semibold text-foreground">כספת</h3>
+                              <div className="grid grid-cols-2 gap-4">
+                                <div className="space-y-2">
+                                  <Label className="text-base">יחידות</Label>
+                                  <Input
+                                    type="number"
+                                    value={data.vault_units}
+                                    onChange={(e) => {
+                                      const val = e.target.value;
+                                      updateInventoryData(selectedTicketDialog.id, 'vault_units', val);
+                                    }}
+                                    placeholder="0"
+                                    min="0"
+                                    className="text-lg h-12"
+                                  />
+                                </div>
+                                {selectedTicketDialog.default_quantity_per_package && (
+                                  <div className="space-y-2">
+                                    <Label className="text-base">חבילות</Label>
+                                    <Input
+                                      type="number"
+                                      value={data.vault_packages}
+                                      onChange={(e) => {
+                                        const val = e.target.value;
+                                        updateInventoryData(selectedTicketDialog.id, 'vault_packages', val);
+                                      }}
+                                      placeholder="0"
+                                      min="0"
+                                      className="text-lg h-12"
+                                    />
+                                  </div>
+                                )}
+                              </div>
+                              {vaultTotal > 0 && (
+                                <div className="mt-2 p-2 bg-accent rounded">
+                                  <p className="text-sm font-semibold">
+                                    סה"כ כספת: {vaultTotal} יחידות
+                                    {vaultPackages > 0 && defaultQtyPerPackage > 1 && (
+                                      <span className="text-muted-foreground mr-2">
+                                        ({vaultPackages} × {defaultQtyPerPackage})
+                                      </span>
+                                    )}
+                                  </p>
+                                </div>
+                              )}
+                            </div>
+
+                            {/* Grand Total Summary */}
+                            {grandTotal > 0 && (
+                              <div className="p-4 bg-gradient-to-r from-indigo-50 to-purple-50 dark:from-indigo-900/20 dark:to-purple-900/20 rounded-lg border-2 border-indigo-200 dark:border-indigo-800">
+                                <h3 className="text-lg font-bold text-foreground mb-2">סיכום כללי</h3>
+                                <div className="space-y-1 text-base">
+                                  <div className="flex justify-between">
+                                    <span className="font-bold text-xl">{grandTotal}</span>
+                                    <span className="font-semibold">סה"כ יחידות</span>
+                                  </div>
+                                  {totalIndividualUnits > 0 && (
+                                    <div className="flex justify-between text-muted-foreground">
+                                      <span>{totalIndividualUnits}</span>
+                                      <span>בודדים</span>
+                                    </div>
+                                  )}
+                                  {totalPackages > 0 && (
+                                    <div className="flex justify-between text-muted-foreground">
+                                      <span>{totalPackages} × {defaultQtyPerPackage} = {totalPackages * defaultQtyPerPackage}</span>
+                                      <span>חבילות</span>
+                                    </div>
+                                  )}
+                                  <div className="mt-3 pt-3 border-t border-border">
+                                    <div className="flex justify-between">
+                                      <span className="font-semibold">{counterTotal}</span>
+                                      <span className="text-sm text-muted-foreground">דלפק</span>
+                                    </div>
+                                    <div className="flex justify-between">
+                                      <span className="font-semibold">{vaultTotal}</span>
+                                      <span className="text-sm text-muted-foreground">כספת</span>
+                                    </div>
+                                  </div>
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })()}
+                      
+                      <DialogFooter>
+                        <Button 
+                          onClick={() => setSelectedTicketDialog(null)}
+                          className="w-full"
+                        >
+                          אישור
+                        </Button>
+                      </DialogFooter>
+                    </DialogContent>
+                  </Dialog>
                 </motion.div>
               )}
 

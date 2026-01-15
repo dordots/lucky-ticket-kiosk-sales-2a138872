@@ -130,7 +130,7 @@ export default function Layout({ children, currentPageName }) {
           navigate('/KioskSelfCreate', { replace: true });
         }
       } else if (path === '/KioskSelfCreate') {
-        navigate('/Dashboard', { replace: true });
+        navigate('/SellerPOS', { replace: true });
       }
     }
   }, [isLoading, kioskLoading, user, currentKiosk, location.pathname, navigate]);
@@ -144,9 +144,9 @@ export default function Layout({ children, currentPageName }) {
       if (!user.onboarding_completed && path !== '/Onboarding') {
         navigate('/Onboarding', { replace: true });
       }
-      // If onboarding is completed but user is on onboarding page, redirect to dashboard
+      // If onboarding is completed but user is on onboarding page, redirect to SellerPOS
       else if (user.onboarding_completed && path === '/Onboarding') {
-        navigate('/Dashboard', { replace: true });
+        navigate('/SellerPOS', { replace: true });
       }
     }
   }, [isLoading, kioskLoading, user, currentKiosk, location.pathname, navigate]);
