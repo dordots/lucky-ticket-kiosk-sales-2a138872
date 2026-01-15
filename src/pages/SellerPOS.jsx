@@ -8,7 +8,12 @@ import {
   ShoppingCart, 
   Search,
   Check,
-  Package
+  Package,
+  ChevronUp,
+  ChevronDown,
+  Plus,
+  Minus,
+  Trash2
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -20,6 +25,7 @@ import TicketGrid from "@/components/pos/TicketGrid";
 import Cart from "@/components/pos/Cart";
 import PaymentDialog from "@/components/pos/PaymentDialog";
 import QuantityDialog from "@/components/pos/QuantityDialog";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 
 export default function SellerPOS() {
   const [user, setUser] = useState(null);
@@ -27,6 +33,7 @@ export default function SellerPOS() {
   const [priceFilter, setPriceFilter] = useState("all"); // all, 5-25, 30-50, 50-100
   const [cartItems, setCartItems] = useState({});
   const [paymentOpen, setPaymentOpen] = useState(false);
+  const [cartExpanded, setCartExpanded] = useState(false);
   const [selectedTicket, setSelectedTicket] = useState(null);
   const [isProcessing, setIsProcessing] = useState(false);
   const [saleCompleted, setSaleCompleted] = useState(false);
@@ -399,7 +406,7 @@ export default function SellerPOS() {
               <div className="w-10 h-10 rounded-xl bg-theme-gradient flex items-center justify-center">
                 <ShoppingCart className="h-5 w-5 text-white" />
               </div>
-              <div className="hidden sm:block">
+              <div>
                 <h1 className="text-lg font-bold text-foreground">דף מכירה</h1>
                 <p className="text-xs text-muted-foreground">מכירה מהירה</p>
               </div>
@@ -409,7 +416,7 @@ export default function SellerPOS() {
       </header>
 
       {/* Main Content */}
-      <div className="flex-1 flex flex-col lg:flex-row gap-6">
+      <div className={`flex-1 flex flex-col lg:flex-row gap-6 ${getItemsCount > 0 ? 'pb-24 lg:pb-0' : ''}`}>
         {/* Tickets Section */}
         <div className="flex-1 p-4 lg:p-6 lg:pl-0">
           {/* Price Filter Tabs */}
@@ -540,14 +547,109 @@ export default function SellerPOS() {
 
         {/* Cart Section - Mobile */}
         {getItemsCount > 0 && (
-          <div className="lg:hidden fixed bottom-0 left-0 right-0 bg-card border-t border-border p-4 shadow-lg">
-            <Button
-              onClick={() => setPaymentOpen(true)}
-              className="w-full h-14 text-lg bg-theme-gradient"
-            >
-              <ShoppingCart className="h-5 w-5 ml-2" />
-              {getItemsCount} פריטים - ₪{calculateTotal.toFixed(2)}
-            </Button>
+          <div className="lg:hidden fixed bottom-0 left-0 right-0 bg-card border-t border-border shadow-lg z-30">
+            <Collapsible open={cartExpanded} onOpenChange={setCartExpanded}>
+              {/* Cart Details - Expandable */}
+              <CollapsibleContent className="overflow-hidden">
+                <div className="max-h-[50vh] overflow-y-auto p-4 border-b border-border">
+                  <div className="space-y-3">
+                    {Object.entries(cartItems).map(([ticketId, item]) => {
+                      const ticket = tickets.find(t => t.id === ticketId);
+                      if (!ticket) return null;
+
+                      return (
+                        <div key={ticketId} className="bg-accent rounded-xl p-3">
+                          <div className="flex items-start justify-between mb-2">
+                            <button
+                              onClick={() => handleRemoveItem(ticketId)}
+                              className="p-1 text-muted-foreground hover:text-destructive transition-colors"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </button>
+                            <div className="text-right flex-1 mr-2">
+                              <h4 className="font-medium text-foreground">{ticket.name}</h4>
+                              <p className="text-sm text-muted-foreground">₪{item.unitPrice} ליחידה</p>
+                            </div>
+                          </div>
+
+                          <div className="flex items-center justify-between">
+                            <span className="font-bold text-primary">
+                              ₪{(item.quantity * item.unitPrice).toFixed(2)}
+                            </span>
+                            <div className="flex items-center gap-2 bg-background rounded-lg p-1">
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-8 w-8"
+                                onClick={() => handleUpdateQuantity(ticketId, item.quantity + 1)}
+                                disabled={item.quantity >= (ticket.quantity_counter ?? 0)}
+                              >
+                                <Plus className="h-4 w-4" />
+                              </Button>
+                              <span className="w-8 text-center font-semibold">
+                                {item.quantity}
+                              </span>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-8 w-8"
+                                onClick={() => handleUpdateQuantity(ticketId, item.quantity - 1)}
+                              >
+                                <Minus className="h-4 w-4" />
+                              </Button>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                  
+                  <div className="mt-4 pt-4 border-t border-border">
+                    <div className="flex items-center justify-between mb-3">
+                      <span className="text-xl font-bold text-primary">₪{calculateTotal.toFixed(2)}</span>
+                      <span className="text-foreground font-medium">סה"כ לתשלום</span>
+                    </div>
+                    <Button
+                      variant="outline"
+                      onClick={handleClearCart}
+                      className="w-full"
+                    >
+                      <Trash2 className="h-4 w-4 ml-2" />
+                      נקה עגלה
+                    </Button>
+                  </div>
+                </div>
+              </CollapsibleContent>
+
+              {/* Expand/Collapse Trigger & Confirm Button */}
+              <div className="p-4">
+                <CollapsibleTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    className="w-full mb-2 h-10 text-muted-foreground hover:text-foreground"
+                  >
+                    {cartExpanded ? (
+                      <>
+                        <ChevronDown className="h-4 w-4 ml-2" />
+                        הסתר פרטי עגלה
+                      </>
+                    ) : (
+                      <>
+                        <ChevronUp className="h-4 w-4 ml-2" />
+                        הצג פרטי עגלה ({getItemsCount} פריטים)
+                      </>
+                    )}
+                  </Button>
+                </CollapsibleTrigger>
+                <Button
+                  onClick={() => setPaymentOpen(true)}
+                  className="w-full h-14 text-lg bg-theme-gradient"
+                >
+                  <Check className="h-5 w-5 ml-2" />
+                  אשר מכירה - ₪{calculateTotal.toFixed(2)}
+                </Button>
+              </div>
+            </Collapsible>
           </div>
         )}
       </div>
@@ -566,6 +668,7 @@ export default function SellerPOS() {
         open={paymentOpen}
         onClose={() => {
           setPaymentOpen(false);
+          setCartExpanded(false);
           setSaleCompleted(false);
           // Stay on the sales screen after successful sale
         }}
