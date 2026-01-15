@@ -21,6 +21,7 @@ const KioskDetails = lazy(() => import("./KioskDetails"));
 const KioskSelfCreate = lazy(() => import("./KioskSelfCreate"));
 const Onboarding = lazy(() => import("./Onboarding"));
 const TicketTypesManagement = lazy(() => import("./TicketTypesManagement"));
+const Notifications = lazy(() => import("./Notifications"));
 
 import { BrowserRouter as Router, Route, Routes, useLocation } from 'react-router-dom';
 
@@ -51,6 +52,7 @@ const PAGES = {
     KioskSelfCreate: KioskSelfCreate,
     Onboarding: Onboarding,
     TicketTypesManagement: TicketTypesManagement,
+    Notifications: Notifications,
 }
 
 function _getCurrentPage(url) {
@@ -116,6 +118,8 @@ function PagesContent() {
                     <Route path="/Onboarding" element={<Onboarding />} />
                     
                     <Route path="/TicketTypesManagement" element={<TicketTypesManagement />} />
+                    
+                    <Route path="/Notifications" element={<Notifications />} />
                     
                 </Routes>
             </Suspense>

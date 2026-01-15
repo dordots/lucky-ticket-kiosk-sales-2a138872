@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { createPageUrl } from "@/utils";
 import { auth } from "@/api/entities";
@@ -7,6 +7,7 @@ import { firebase } from "@/api/firebaseClient";
 import { useQuery } from "@tanstack/react-query";
 import Login from "./Login";
 import { useKiosk } from "@/contexts/KioskContext";
+import * as ticketTypesService from "@/firebase/services/ticketTypes";
 import { 
   ShoppingCart, 
   LayoutDashboard, 
@@ -20,7 +21,8 @@ import {
   ChevronLeft,
   Settings,
   Store,
-  ShieldAlert
+  ShieldAlert,
+  Bell
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -39,6 +41,74 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+
+// Notification Bell Component
+function NotificationBell({ currentKiosk, user }) {
+  const navigate = useNavigate();
+  
+  // Query to get tickets and calculate active notifications
+  const { data: tickets = [] } = useQuery({
+    queryKey: ['tickets-for-notifications-layout', currentKiosk?.id],
+    queryFn: async () => {
+      if (!currentKiosk?.id || user?.role === 'system_manager') return [];
+      try {
+        return await ticketTypesService.getTicketTypesByKiosk(currentKiosk.id);
+      } catch (error) {
+        console.error('Error loading tickets for notifications:', error);
+        return [];
+      }
+    },
+    enabled: !!currentKiosk?.id && !!user && user?.role !== 'system_manager',
+    refetchInterval: 10000, // Refetch every 10 seconds to catch inventory changes
+  });
+
+  // Calculate active notifications count
+  const activeNotificationsCount = useMemo(() => {
+    if (!tickets.length || !currentKiosk) return 0;
+    
+    let count = 0;
+    tickets.forEach(ticket => {
+      const quantityCounter = ticket.quantity_counter ?? 0;
+      const quantityVault = ticket.quantity_vault ?? 0;
+      const totalQuantity = quantityCounter + quantityVault;
+      const threshold = ticket.min_threshold || 10;
+      
+      // Out of stock: was in inventory but counter is now 0
+      if (ticket.is_active && totalQuantity > 0 && quantityCounter === 0) {
+        count++;
+      }
+      // Critical stock: counter > 0 but <= threshold
+      else if (ticket.is_active && totalQuantity > 0 && quantityCounter > 0 && quantityCounter <= threshold) {
+        count++;
+      }
+    });
+    
+    return count;
+  }, [tickets, currentKiosk]);
+
+  // Don't show bell for system managers or if no kiosk
+  if (user?.role === 'system_manager' || !currentKiosk) {
+    return null;
+  }
+
+  return (
+    <Button
+      variant="outline"
+      size="icon"
+      className="relative h-12 w-12 rounded-full bg-background shadow-lg hover:bg-accent"
+      onClick={() => navigate(createPageUrl("Notifications"))}
+    >
+      <Bell className="h-5 w-5" />
+      {activeNotificationsCount > 0 && (
+        <Badge 
+          className="absolute -top-1 -right-1 h-6 w-6 rounded-full flex items-center justify-center p-0 bg-red-500 text-white text-xs font-bold"
+        >
+          {activeNotificationsCount > 99 ? '99+' : activeNotificationsCount}
+        </Badge>
+      )}
+    </Button>
+  );
+}
 
 export default function Layout({ children, currentPageName }) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -276,6 +346,8 @@ export default function Layout({ children, currentPageName }) {
             <Menu className="h-6 w-6" />
           </Button>
           <h1 className="text-lg font-bold text-foreground">Nobee</h1>
+          {/* Notifications Bell - Mobile */}
+          <NotificationBell currentKiosk={currentKiosk} user={user} />
         </div>
       </header>
 
@@ -411,6 +483,10 @@ export default function Layout({ children, currentPageName }) {
       {/* Main Content */}
       <main className="flex-1 lg:mr-0 min-h-0 h-full pt-16 lg:pt-0 overflow-y-auto bg-background">
         <div className="p-4 lg:p-8 h-full">
+          {/* Notifications Bell - Top Left as part of page (Desktop only) */}
+          <div className="hidden lg:flex mb-4 justify-start">
+            <NotificationBell currentKiosk={currentKiosk} user={user} />
+          </div>
           {children}
         </div>
       </main>
