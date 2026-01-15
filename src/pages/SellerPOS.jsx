@@ -355,6 +355,9 @@ export default function SellerPOS() {
 
         if (lowStockTickets.length > 0) {
           setLowStockAlert(lowStockTickets);
+        } else {
+          // If no low stock alert, reset filter immediately after successful sale
+          setPriceFilter("all");
         }
 
         // Refresh data in background
@@ -669,6 +672,7 @@ export default function SellerPOS() {
         if (!open) {
           setLowStockAlert(null);
           setSaleCompleted(false); // Reset sale completed state to return to ticket grid
+          setPriceFilter("all"); // Reset price filter to show all tickets
         }
       }}>
         <AlertDialogContent className="max-w-[calc(100vw-2rem)] sm:max-w-md" dir="rtl">
@@ -705,6 +709,7 @@ export default function SellerPOS() {
             <AlertDialogAction onClick={() => {
               setLowStockAlert(null);
               setSaleCompleted(false); // Reset sale completed state to return to ticket grid
+              setPriceFilter("all"); // Reset price filter to show all tickets
             }}>
               הבנתי
             </AlertDialogAction>
