@@ -20,9 +20,17 @@ export default function QuantityDialog({
   const [quantity, setQuantity] = useState(currentQty || 1);
   const maxQty = ticket?.quantity_counter ?? 0;
 
+  // Update quantity when currentQty changes (when reopening dialog for same ticket)
+  React.useEffect(() => {
+    if (open && currentQty) {
+      setQuantity(currentQty);
+    } else if (open && !currentQty) {
+      setQuantity(1);
+    }
+  }, [open, currentQty]);
+
   const handleConfirm = () => {
     onConfirm(quantity);
-    setQuantity(1);
     onClose();
   };
 

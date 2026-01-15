@@ -7,6 +7,7 @@ import * as ticketTypesService from "@/firebase/services/ticketTypes";
 import { motion, AnimatePresence } from "framer-motion";
 import { 
   Plus, 
+  Minus,
   Search, 
   Package, 
   Edit, 
@@ -137,6 +138,17 @@ export default function Inventory() {
     defaultQuantityPerPackage: null,
     min_threshold: "10", // Required when adding ticket to inventory
   });
+  const [reduceStockDialogOpen, setReduceStockDialogOpen] = useState(false);
+  const [reduceStockFormData, setReduceStockFormData] = useState({
+    ticketId: "",
+    ticketName: "",
+    units: "",
+    packages: "",
+    destination: "counter",
+    defaultQuantityPerPackage: null,
+    currentQuantity: 0,
+  });
+  const [lowStockAlert, setLowStockAlert] = useState(null);
   const [viewDialogOpen, setViewDialogOpen] = useState(false);
   const [viewTicket, setViewTicket] = useState(null);
   const [sortBy, setSortBy] = useState("name"); // name, price, quantity_counter, quantity_vault, total_quantity, demand
@@ -267,6 +279,9 @@ export default function Inventory() {
       queryClient.invalidateQueries({ queryKey: ['tickets-inventory', currentKiosk?.id] });
       queryClient.invalidateQueries({ queryKey: ['tickets-dashboard', currentKiosk?.id] });
       queryClient.invalidateQueries({ queryKey: ['tickets-active'] });
+      queryClient.invalidateQueries({ queryKey: ['notifications-all'] });
+      queryClient.invalidateQueries({ queryKey: ['notifications-unread'] });
+      queryClient.invalidateQueries({ queryKey: ['notifications-unread-layout'] });
       setDialogOpen(false);
       resetForm();
       // Toast notification removed
@@ -1149,7 +1164,7 @@ export default function Inventory() {
                   )}
                   
                   <CardContent className="p-2 sm:p-4">
-                    <div className="flex items-start justify-between mb-1 sm:mb-3">
+                    <div className="flex items-start justify-between mb-1 sm:mb-3 gap-2">
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-1 sm:gap-2 mb-0.5 sm:mb-1">
                           <div className="min-w-0">
@@ -1159,16 +1174,26 @@ export default function Inventory() {
                             )}
                           </div>
                         </div>
-                        <p className="text-xs text-muted-foreground truncate">{ticket.code}</p>
+                        <p className="text-[10px] sm:text-xs text-muted-foreground truncate">{ticket.code}</p>
                       </div>
-                      {/* Checkbox */}
-                      <div className="flex-shrink-0">
+                      {/* Checkbox and Edit Button in same column */}
+                      <div className="flex flex-col items-center gap-0.5 flex-shrink-0">
                         <Checkbox
                           checked={selectedTicketIds.has(ticket.id)}
                           onCheckedChange={() => handleToggleSelect(ticket.id)}
                           id={`ticket-${ticket.id}`}
-                          className="h-3 w-3 sm:h-4 sm:w-4"
+                          className="h-3 w-3 sm:h-3.5 sm:w-3.5"
                         />
+                        <Button 
+                          variant="ghost" 
+                          size="icon" 
+                          onClick={() => handleEdit(ticket)}
+                          disabled={user?.role === 'assistant' && !(activeTab === 'counter' ? canEditCounter : canEditVault)}
+                          title="עריכת כרטיס"
+                          className="h-6 w-6 sm:h-7 sm:w-7"
+                        >
+                          <Edit className="h-3 w-3 sm:h-3.5 sm:w-3.5 text-muted-foreground" />
+                        </Button>
                       </div>
                     </div>
 
@@ -1208,65 +1233,65 @@ export default function Inventory() {
                       </div>
                     </div>
 
-                    {/* Actions */}
-                    <div className="flex items-center justify-between gap-1 sm:gap-2 mt-1 sm:mt-3">
-                      <div className="flex gap-0.5 sm:gap-1">
+                    {/* Actions - Stock Management */}
+                    <div className="flex items-center gap-1 mt-2 sm:mt-3">
+                      <Button 
+                        variant="ghost" 
+                        size="icon" 
+                        onClick={() => {
+                          setViewTicket(ticket);
+                          setViewDialogOpen(true);
+                        }}
+                        title="צפייה בכרטיס"
+                        className="h-7 w-7 sm:h-7 sm:w-7"
+                      >
+                        <Eye className="h-3.5 w-3.5 sm:h-3.5 sm:w-3.5 text-blue-500" />
+                      </Button>
+                      <Button 
+                        variant="ghost" 
+                        size="icon" 
+                        onClick={() => {
+                          setPackagesFormData({
+                            ticketId: ticket.id,
+                            ticketName: ticket.name,
+                            units: "",
+                            packages: "",
+                            destination: activeTab, // Set based on active tab
+                            defaultQuantityPerPackage: ticket.default_quantity_per_package || null,
+                            min_threshold: ticket.min_threshold?.toString() || "10",
+                          });
+                          setPackagesDialogOpen(true);
+                        }}
+                        disabled={user?.role === 'assistant' && !(activeTab === 'counter' ? canAddStockCounter : canAddStockVault)}
+                        title={ticket.default_quantity_per_package ? "הוסף מלאי לפי חבילות" : "הוסף מלאי"}
+                        className={`${ticket.default_quantity_per_package ? "text-green-600" : ""} h-7 w-7 sm:h-7 sm:w-7`}
+                      >
+                        <Plus className="h-3.5 w-3.5 sm:h-3.5 sm:w-3.5" />
+                      </Button>
+                      {(activeTab === 'counter' ? quantityCounter > 0 : quantityVault > 0) && (
                         <Button 
                           variant="ghost" 
                           size="icon" 
                           onClick={() => {
-                            setPackagesFormData({
+                            const currentQty = activeTab === 'counter' ? quantityCounter : quantityVault;
+                            setReduceStockFormData({
                               ticketId: ticket.id,
                               ticketName: ticket.name,
                               units: "",
                               packages: "",
-                              destination: activeTab, // Set based on active tab
+                              destination: activeTab,
                               defaultQuantityPerPackage: ticket.default_quantity_per_package || null,
-                              min_threshold: ticket.min_threshold?.toString() || "10",
+                              currentQuantity: currentQty,
                             });
-                            setPackagesDialogOpen(true);
+                            setReduceStockDialogOpen(true);
                           }}
-                          disabled={user?.role === 'assistant' && !(activeTab === 'counter' ? canAddStockCounter : canAddStockVault)}
-                          title={ticket.default_quantity_per_package ? "עדכן מלאי לפי חבילות" : "עדכן מלאי"}
-                          className={`${ticket.default_quantity_per_package ? "text-green-600" : ""} h-6 w-6 sm:h-8 sm:w-8`}
-                        >
-                          <Plus className="h-3 w-3 sm:h-4 sm:w-4" />
-                        </Button>
-                      </div>
-                      <div className="flex gap-0.5 sm:gap-1">
-                        <Button 
-                          variant="ghost" 
-                          size="icon" 
-                          onClick={() => {
-                            setViewTicket(ticket);
-                            setViewDialogOpen(true);
-                          }}
-                          title="צפייה בכרטיס"
-                          className="h-6 w-6 sm:h-8 sm:w-8"
-                        >
-                          <Eye className="h-3 w-3 sm:h-4 sm:w-4 text-muted-foreground" />
-                        </Button>
-                        <Button 
-                          variant="ghost" 
-                          size="icon" 
-                          onClick={() => handleEdit(ticket)}
                           disabled={user?.role === 'assistant' && !(activeTab === 'counter' ? canEditCounter : canEditVault)}
-                          title="עריכת כרטיס"
-                          className="h-6 w-6 sm:h-8 sm:w-8"
+                          title="הפחת מלאי"
+                          className="h-7 w-7 sm:h-7 sm:w-7 text-orange-600"
                         >
-                          <Edit className="h-3 w-3 sm:h-4 sm:w-4 text-muted-foreground" />
+                          <Minus className="h-3.5 w-3.5 sm:h-3.5 sm:w-3.5" />
                         </Button>
-                        <Button 
-                          variant="ghost" 
-                          size="icon" 
-                          onClick={() => handleDelete(ticket)}
-                          disabled={user?.role === 'assistant' && !canDelete}
-                          title="מחיקת כרטיס"
-                          className="h-6 w-6 sm:h-8 sm:w-8"
-                        >
-                          <Trash2 className="h-3 w-3 sm:h-4 sm:w-4 text-red-400" />
-                        </Button>
-                      </div>
+                      )}
                     </div>
                   </CardContent>
                 </Card>
@@ -1356,7 +1381,7 @@ export default function Inventory() {
                       )}
                       
                       <CardContent className="p-2 sm:p-4">
-                        <div className="flex items-start justify-between mb-1 sm:mb-3">
+                        <div className="flex items-start justify-between mb-1 sm:mb-3 gap-2">
                           <div className="flex-1 min-w-0">
                             <div className="flex items-center gap-1 sm:gap-2 mb-0.5 sm:mb-1">
                               <div className="min-w-0">
@@ -1367,14 +1392,24 @@ export default function Inventory() {
                               </div>
                             </div>
                           </div>
-                          {/* Checkbox */}
-                          <div className="flex-shrink-0">
+                          {/* Checkbox and Edit Button in same column */}
+                          <div className="flex flex-col items-center gap-0.5 flex-shrink-0">
                             <Checkbox
                               checked={selectedTicketIds.has(ticket.id)}
                               onCheckedChange={() => handleToggleSelect(ticket.id)}
                               id={`ticket-vault-${ticket.id}`}
-                              className="h-3 w-3 sm:h-4 sm:w-4"
+                              className="h-3 w-3 sm:h-3.5 sm:w-3.5"
                             />
+                            <Button 
+                              variant="ghost" 
+                              size="icon" 
+                              onClick={() => handleEdit(ticket)}
+                              disabled={user?.role === 'assistant' && !(activeTab === 'counter' ? canEditCounter : canEditVault)}
+                              title="עריכת כרטיס"
+                              className="h-6 w-6 sm:h-7 sm:w-7"
+                            >
+                              <Edit className="h-3 w-3 sm:h-3.5 sm:w-3.5 text-muted-foreground" />
+                            </Button>
                           </div>
                         </div>
 
@@ -1414,31 +1449,52 @@ export default function Inventory() {
                           </div>
                         </div>
 
-                        {/* Actions */}
-                        <div className="flex items-center justify-between gap-1 sm:gap-2 mt-1 sm:mt-3">
-                          <div className="flex gap-0.5 sm:gap-1">
-                            <Button 
-                              variant="ghost" 
-                              size="icon" 
-                              onClick={() => {
-                                setPackagesFormData({
-                                  ticketId: ticket.id,
-                                  ticketName: ticket.name,
-                                  units: "",
-                                  packages: "",
-                                  destination: activeTab, // Set based on active tab
-                                  defaultQuantityPerPackage: ticket.default_quantity_per_package || null,
-                                  min_threshold: ticket.min_threshold?.toString() || "10",
-                                });
-                                setPackagesDialogOpen(true);
-                              }}
-                              disabled={user?.role === 'assistant' && !(activeTab === 'counter' ? canAddStockCounter : canAddStockVault)}
-                              title={ticket.default_quantity_per_package ? "עדכן מלאי לפי חבילות" : "עדכן מלאי"}
-                              className={`${ticket.default_quantity_per_package ? "text-green-600" : ""} h-6 w-6 sm:h-8 sm:w-8`}
-                            >
-                              <Plus className="h-3 w-3 sm:h-4 sm:w-4" />
-                            </Button>
-                            {quantityVault > 0 && (
+                        {/* Actions - Stock Management */}
+                        <div className="flex items-center gap-1 mt-2 sm:mt-3">
+                          <Button 
+                            variant="ghost" 
+                            size="icon" 
+                            onClick={() => {
+                              setPackagesFormData({
+                                ticketId: ticket.id,
+                                ticketName: ticket.name,
+                                units: "",
+                                packages: "",
+                                destination: activeTab, // Set based on active tab
+                                defaultQuantityPerPackage: ticket.default_quantity_per_package || null,
+                                min_threshold: ticket.min_threshold?.toString() || "10",
+                              });
+                              setPackagesDialogOpen(true);
+                            }}
+                            disabled={user?.role === 'assistant' && !(activeTab === 'counter' ? canAddStockCounter : canAddStockVault)}
+                            title={ticket.default_quantity_per_package ? "הוסף מלאי לפי חבילות" : "הוסף מלאי"}
+                            className={`${ticket.default_quantity_per_package ? "text-green-600" : ""} h-7 w-7 sm:h-7 sm:w-7`}
+                          >
+                            <Plus className="h-3.5 w-3.5 sm:h-3.5 sm:w-3.5" />
+                          </Button>
+                          {quantityVault > 0 && (
+                            <>
+                              <Button 
+                                variant="ghost" 
+                                size="icon" 
+                                onClick={() => {
+                                  setReduceStockFormData({
+                                    ticketId: ticket.id,
+                                    ticketName: ticket.name,
+                                    units: "",
+                                    packages: "",
+                                    destination: activeTab,
+                                    defaultQuantityPerPackage: ticket.default_quantity_per_package || null,
+                                    currentQuantity: quantityVault,
+                                  });
+                                  setReduceStockDialogOpen(true);
+                                }}
+                                disabled={user?.role === 'assistant' && !(activeTab === 'counter' ? canEditCounter : canEditVault)}
+                                title="הפחת מלאי"
+                                className="h-7 w-7 sm:h-7 sm:w-7 text-orange-600"
+                              >
+                                <Minus className="h-3.5 w-3.5 sm:h-3.5 sm:w-3.5" />
+                              </Button>
                               <Button 
                                 variant="ghost" 
                                 size="icon" 
@@ -1448,46 +1504,12 @@ export default function Inventory() {
                                 }}
                                 disabled={user?.role === 'assistant' && (!canTransferVaultToCounter || !canViewVault)}
                                 title="העבר מכספת לדלפק"
-                                className="h-6 w-6 sm:h-8 sm:w-8"
+                                className="h-7 w-7 sm:h-7 sm:w-7"
                               >
-                                <Package className="h-3 w-3 sm:h-4 sm:w-4 text-blue-500" />
+                                <Package className="h-3.5 w-3.5 sm:h-3.5 sm:w-3.5 text-blue-500" />
                               </Button>
-                            )}
-                          </div>
-                          <div className="flex gap-0.5 sm:gap-1">
-                            <Button 
-                              variant="ghost" 
-                              size="icon" 
-                              onClick={() => {
-                                setViewTicket(ticket);
-                                setViewDialogOpen(true);
-                              }}
-                              title="צפייה בכרטיס"
-                              className="h-6 w-6 sm:h-8 sm:w-8"
-                            >
-                              <Eye className="h-3 w-3 sm:h-4 sm:w-4 text-muted-foreground" />
-                            </Button>
-                            <Button 
-                              variant="ghost" 
-                              size="icon" 
-                              onClick={() => handleEdit(ticket)}
-                              disabled={user?.role === 'assistant' && !(activeTab === 'counter' ? canEditCounter : canEditVault)}
-                              title="עריכת כרטיס"
-                              className="h-6 w-6 sm:h-8 sm:w-8"
-                            >
-                              <Edit className="h-3 w-3 sm:h-4 sm:w-4 text-muted-foreground" />
-                            </Button>
-                            <Button 
-                              variant="ghost" 
-                              size="icon" 
-                              onClick={() => handleDelete(ticket)}
-                              disabled={user?.role === 'assistant' && !canDelete}
-                              title="מחיקת כרטיס"
-                              className="h-6 w-6 sm:h-8 sm:w-8"
-                            >
-                              <Trash2 className="h-3 w-3 sm:h-4 sm:w-4 text-red-400" />
-                            </Button>
-                          </div>
+                            </>
+                          )}
                         </div>
                       </CardContent>
                     </Card>
@@ -2228,6 +2250,10 @@ export default function Inventory() {
                   queryClient.invalidateQueries({ queryKey: ['tickets-inventory', currentKiosk?.id] });
                   queryClient.invalidateQueries({ queryKey: ['tickets-dashboard', currentKiosk?.id] });
                   queryClient.invalidateQueries({ queryKey: ['tickets-active'] });
+                  queryClient.invalidateQueries({ queryKey: ['tickets-for-notifications-layout'] });
+                  queryClient.invalidateQueries({ queryKey: ['tickets-for-notifications'] });
+                  queryClient.invalidateQueries({ queryKey: ['notifications-all'] });
+                  queryClient.invalidateQueries({ queryKey: ['notifications-unread'] });
                   
                   setTransferDialogOpen(false);
                   setTransferFormData({ ticketId: "", transfer_units: "", transfer_packages: "" });
@@ -2509,6 +2535,10 @@ export default function Inventory() {
                   queryClient.invalidateQueries({ queryKey: ['tickets-inventory', currentKiosk?.id] });
                   queryClient.invalidateQueries({ queryKey: ['tickets-dashboard', currentKiosk?.id] });
                   queryClient.invalidateQueries({ queryKey: ['tickets-active'] });
+                  queryClient.invalidateQueries({ queryKey: ['tickets-for-notifications-layout'] });
+                  queryClient.invalidateQueries({ queryKey: ['tickets-for-notifications'] });
+                  queryClient.invalidateQueries({ queryKey: ['notifications-all'] });
+                  queryClient.invalidateQueries({ queryKey: ['notifications-unread'] });
                   
                   setPackagesDialogOpen(false);
                   setPackagesFormData({
@@ -2533,6 +2563,237 @@ export default function Inventory() {
               className="bg-theme-gradient"
             >
               הוסף
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Reduce Stock Dialog */}
+      <Dialog open={reduceStockDialogOpen} onOpenChange={setReduceStockDialogOpen}>
+        <DialogContent className="max-w-[calc(100vw-2rem)] sm:max-w-sm" dir="rtl">
+          <DialogHeader>
+            <DialogTitle>
+              הפחתת מלאי מ{reduceStockFormData.destination === "counter" ? "דלפק" : "כספת"}
+            </DialogTitle>
+          </DialogHeader>
+          
+          {reduceStockFormData.ticketId ? (
+            <div className="space-y-4 py-4">
+              <div className="p-4 bg-accent rounded-lg">
+                <div className="text-sm font-semibold">{reduceStockFormData.ticketName}</div>
+                <div className="text-xs text-muted-foreground mt-1">
+                  מלאי נוכחי: <strong>{reduceStockFormData.currentQuantity}</strong> יחידות
+                </div>
+                {reduceStockFormData.defaultQuantityPerPackage && (
+                  <div className="text-xs text-muted-foreground mt-1">
+                    כמות בכל חבילה: {reduceStockFormData.defaultQuantityPerPackage} כרטיסים
+                  </div>
+                )}
+              </div>
+
+              <div className="space-y-3">
+                <div className="space-y-2">
+                  <Label>מספר יחידות להפחתה</Label>
+                  <Input
+                    type="number"
+                    value={reduceStockFormData.units}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      const numVal = parseInt(val) || 0;
+                      setReduceStockFormData({
+                        ...reduceStockFormData,
+                        units: val,
+                        packages: numVal > 0 ? "" : reduceStockFormData.packages // Clear packages only if units > 0
+                      });
+                    }}
+                    placeholder="0"
+                    min="0"
+                    max={reduceStockFormData.currentQuantity}
+                    disabled={!!reduceStockFormData.packages && parseInt(reduceStockFormData.packages) > 0}
+                  />
+                </div>
+                {reduceStockFormData.defaultQuantityPerPackage && (
+                  <div className="space-y-2">
+                    <Label>מספר חבילות להפחתה</Label>
+                    <Input
+                      type="number"
+                      value={reduceStockFormData.packages}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        const numVal = parseInt(val) || 0;
+                        setReduceStockFormData({
+                          ...reduceStockFormData,
+                          packages: val,
+                          units: numVal > 0 ? "" : reduceStockFormData.units // Clear units only if packages > 0
+                        });
+                      }}
+                      placeholder="0"
+                      min="0"
+                      max={Math.floor(reduceStockFormData.currentQuantity / reduceStockFormData.defaultQuantityPerPackage)}
+                      disabled={!!reduceStockFormData.units && parseInt(reduceStockFormData.units) > 0}
+                    />
+                    {reduceStockFormData.packages && (
+                      <p className="text-xs text-muted-foreground">
+                        סה"כ כרטיסים: <strong>{parseInt(reduceStockFormData.packages || 0) * reduceStockFormData.defaultQuantityPerPackage}</strong>
+                      </p>
+                    )}
+                  </div>
+                )}
+              </div>
+            </div>
+          ) : null}
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => {
+              setReduceStockDialogOpen(false);
+              setReduceStockFormData({
+                ticketId: "",
+                ticketName: "",
+                units: "",
+                packages: "",
+                destination: "counter",
+                defaultQuantityPerPackage: null,
+                currentQuantity: 0,
+              });
+            }}>
+              ביטול
+            </Button>
+            <Button
+              onClick={async () => {
+                try {
+                  if (!reduceStockFormData.ticketId || !currentKiosk?.id) return;
+
+                  const unitsValue = parseInt(reduceStockFormData.units) || 0;
+                  const packagesValue = parseInt(reduceStockFormData.packages) || 0;
+                  
+                  if (unitsValue <= 0 && packagesValue <= 0) {
+                    alert('נא להזין כמות להפחתה');
+                    return;
+                  }
+
+                  let quantity = 0;
+                  if (unitsValue > 0) {
+                    quantity = unitsValue;
+                  } else if (packagesValue > 0) {
+                    if (!reduceStockFormData.defaultQuantityPerPackage) {
+                      alert('לא ניתן להפחית לפי חבילות - לא הוגדרה כמות בחבילה');
+                      return;
+                    }
+                    quantity = packagesValue * reduceStockFormData.defaultQuantityPerPackage;
+                  }
+
+                  if (quantity > reduceStockFormData.currentQuantity) {
+                    alert(`לא ניתן להפחית יותר מהמלאי הקיים (${reduceStockFormData.currentQuantity})`);
+                    return;
+                  }
+
+                  // Check permissions
+                  if (user?.role === 'assistant') {
+                    const canEdit = reduceStockFormData.destination === "counter" ? canEditCounter : canEditVault;
+                    if (!canEdit) {
+                      alert('אין לך הרשאה להפחתת מלאי מ' + (reduceStockFormData.destination === "counter" ? "דלפק" : "כספת"));
+                      return;
+                    }
+                  }
+
+                  const ticket = tickets.find(t => t.id === reduceStockFormData.ticketId);
+                  if (!ticket) {
+                    alert('כרטיס לא נמצא');
+                    return;
+                  }
+
+                  const currentCounter = ticket.quantity_counter ?? 0;
+                  const currentVault = ticket.quantity_vault ?? 0;
+                  
+                  const updateData = {};
+                  let newQuantityCounter = currentCounter;
+                  let newQuantityVault = currentVault;
+                  
+                  if (reduceStockFormData.destination === "counter") {
+                    newQuantityCounter = Math.max(0, currentCounter - quantity);
+                    updateData.quantity_counter = newQuantityCounter;
+                    updateData.quantity_vault = currentVault;
+                  } else {
+                    newQuantityVault = Math.max(0, currentVault - quantity);
+                    updateData.quantity_counter = currentCounter;
+                    updateData.quantity_vault = newQuantityVault;
+                  }
+
+                  await ticketTypesService.updateTicketType(reduceStockFormData.ticketId, updateData, currentKiosk.id);
+
+                  // Check for low stock or out of stock after reduction
+                  const threshold = ticket.min_threshold || 10;
+                  const checkQuantity = reduceStockFormData.destination === "counter" ? newQuantityCounter : newQuantityVault;
+                  
+                  if (checkQuantity === 0 || checkQuantity <= threshold) {
+                    setLowStockAlert({
+                      name: reduceStockFormData.ticketName,
+                      quantity: checkQuantity,
+                      threshold: threshold,
+                      type: checkQuantity === 0 ? 'out_of_stock' : 'low_stock',
+                      location: reduceStockFormData.destination === "counter" ? "דלפק" : "כספת"
+                    });
+                  }
+
+                  // Create audit log
+                  try {
+                    await AuditLog.create({
+                      action: "reduce_inventory",
+                      actor_id: user?.id,
+                      actor_name: user?.full_name || user?.email,
+                      entity_id: reduceStockFormData.ticketId,
+                      entity_type: "TicketType",
+                      details: {
+                        ticket_id: reduceStockFormData.ticketId,
+                        ticket_name: reduceStockFormData.ticketName,
+                        destination: reduceStockFormData.destination,
+                        destination_name: reduceStockFormData.destination === "counter" ? "דלפק" : "כספת",
+                        quantity_reduced: quantity,
+                        quantity_per_package: reduceStockFormData.defaultQuantityPerPackage || null,
+                        packages_reduced: packagesValue || null,
+                        quantity_after_counter: updateData.quantity_counter,
+                        quantity_after_vault: updateData.quantity_vault,
+                        message: packagesValue > 0
+                          ? `הופחתו ${packagesValue} חבילות (${quantity} כרטיסים) מ${reduceStockFormData.destination === "counter" ? "דלפק" : "כספת"}`
+                          : `הופחתו ${quantity} כרטיסים מ${reduceStockFormData.destination === "counter" ? "דלפק" : "כספת"}`
+                      },
+                      kiosk_id: currentKiosk.id,
+                    });
+                  } catch (auditError) {
+                    console.error("Error creating audit log:", auditError);
+                  }
+                  
+                  queryClient.invalidateQueries({ queryKey: ['tickets-inventory', currentKiosk?.id] });
+                  queryClient.invalidateQueries({ queryKey: ['tickets-dashboard', currentKiosk?.id] });
+                  queryClient.invalidateQueries({ queryKey: ['tickets-active'] });
+                  queryClient.invalidateQueries({ queryKey: ['tickets-for-notifications-layout'] });
+                  queryClient.invalidateQueries({ queryKey: ['tickets-for-notifications'] });
+                  queryClient.invalidateQueries({ queryKey: ['notifications-all'] });
+                  queryClient.invalidateQueries({ queryKey: ['notifications-unread'] });
+                  
+                  setReduceStockDialogOpen(false);
+                  setReduceStockFormData({
+                    ticketId: "",
+                    ticketName: "",
+                    units: "",
+                    packages: "",
+                    destination: "counter",
+                    defaultQuantityPerPackage: null,
+                    currentQuantity: 0,
+                  });
+                } catch (error) {
+                  console.error('Error reducing stock:', error);
+                  alert('שגיאה בהפחתת המלאי: ' + (error.message || 'שגיאה לא ידועה'));
+                }
+              }}
+              disabled={
+                !reduceStockFormData.ticketId || 
+                ((!reduceStockFormData.units || parseInt(reduceStockFormData.units) <= 0) && 
+                 (!reduceStockFormData.packages || parseInt(reduceStockFormData.packages) <= 0))
+              }
+              className="bg-orange-600 hover:bg-orange-700"
+            >
+              הפחת
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -2675,6 +2936,46 @@ export default function Inventory() {
               className="bg-red-600 hover:bg-red-700"
             >
               {bulkDeleteMutation.isPending ? 'מוחק...' : 'מחק נבחרים'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Low Stock Alert Dialog */}
+      <AlertDialog open={!!lowStockAlert} onOpenChange={(open) => !open && setLowStockAlert(null)}>
+        <AlertDialogContent className="max-w-[calc(100vw-2rem)] sm:max-w-md" dir="rtl">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2">
+              <AlertTriangle className="h-5 w-5 text-amber-500" />
+              התראת מלאי
+            </AlertDialogTitle>
+            <AlertDialogDescription className="pt-2">
+              {lowStockAlert && (
+                <div className={`p-3 rounded-lg ${
+                  lowStockAlert.type === 'out_of_stock' 
+                    ? 'bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800' 
+                    : 'bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800'
+                }`}>
+                  <div className="flex items-center justify-between">
+                    <span className="font-medium text-foreground">{lowStockAlert.name}</span>
+                    <span className={`text-sm font-bold ${
+                      lowStockAlert.type === 'out_of_stock' ? 'text-red-600 dark:text-red-400' : 'text-amber-600 dark:text-amber-400'
+                    }`}>
+                      {lowStockAlert.type === 'out_of_stock' ? 'אזל מהמלאי!' : 'מלאי נמוך'}
+                    </span>
+                  </div>
+                  <p className="text-sm text-foreground mt-1">
+                    {lowStockAlert.type === 'out_of_stock' 
+                      ? `המלאי ב${lowStockAlert.location} אזל לחלוטין` 
+                      : `המלאי ב${lowStockAlert.location}: ${lowStockAlert.quantity} יחידות (סף: ${lowStockAlert.threshold})`}
+                  </p>
+                </div>
+              )}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogAction onClick={() => setLowStockAlert(null)}>
+              הבנתי
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

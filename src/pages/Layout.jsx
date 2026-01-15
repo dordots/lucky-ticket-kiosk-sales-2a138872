@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { createPageUrl } from "@/utils";
-import { auth, Notification } from "@/api/entities";
+import { auth } from "@/api/entities";
 import { firebase } from "@/api/firebaseClient";
 import { useQuery } from "@tanstack/react-query";
 import Login from "./Login";
@@ -14,7 +14,6 @@ import {
   History, 
   Users, 
   BarChart3, 
-  Bell,
   Menu,
   X,
   LogOut,
@@ -74,19 +73,6 @@ export default function Layout({ children, currentPageName }) {
     return () => unsubscribe();
   }, [location.pathname, navigate]);
 
-  const { data: notifications = [] } = useQuery({
-    queryKey: ['notifications-unread', user?.id],
-    queryFn: () => {
-      // System managers don't need notifications
-      if (user?.role === 'system_manager') {
-        return [];
-      }
-      return Notification.filter({ is_read: false });
-    },
-    enabled: !!user && user.role !== 'system_manager',
-    refetchInterval: 30000,
-  });
-
   const isOwner = user?.position === 'owner' || user?.role === 'admin';
   const isSystemManager = user?.role === 'system_manager';
   const isFranchisee = user?.role === 'franchisee';
@@ -99,7 +85,7 @@ export default function Layout({ children, currentPageName }) {
 
   const navItems = [
     { name: "דף מכירה", icon: ShoppingCart, page: "SellerPOS", roles: ['all'], perm: "sell" },
-    { name: "לוח בקרה", icon: LayoutDashboard, page: "Dashboard", roles: ['all', 'owner', 'franchisee'], perm: "dashboard_view" },
+    { name: "לוח בקרה ודוחות", icon: LayoutDashboard, page: "DashboardReports", roles: ['all', 'owner', 'franchisee'], perm: "dashboard_view", permAlt: "reports_view" },
     { name: "מלאי", icon: Package, page: "Inventory", roles: ['owner', 'franchisee'], perm: "inventory_view_counter", permAlt: "inventory_view_vault" },
     { name: "היסטוריית מכירות", icon: History, page: "SalesHistory", roles: ['all', 'franchisee'], perm: "sales_history_view", permAlt: "sales_cancel_own", permAlt2: "sales_cancel_all" },
     { name: "פרטי קיוסק", icon: Store, page: "KioskDetails", roles: ['franchisee'], perm: "kiosk_details_view" },
@@ -109,7 +95,6 @@ export default function Layout({ children, currentPageName }) {
     { name: "יצירת קיוסק", icon: Store, page: "KioskSelfCreate", roles: ['franchisee'] },
     { name: "לוח בקרה - קיוסקים", icon: LayoutDashboard, page: "KiosksDashboard", roles: ['system_manager'] },
     { name: "יצירת משתמשים", icon: ShieldAlert, page: "FranchiseesManagement", roles: ['system_manager'] },
-    { name: "דוחות", icon: BarChart3, page: "Reports", roles: ['owner', 'franchisee'], perm: "reports_view" },
     { name: "יומן פעולות", icon: History, page: "AuditLog", roles: ['owner', 'franchisee'], perm: "audit_log_view" },
     { name: "הגדרות", icon: Settings, page: "Settings", roles: ['all'] },
   ];
@@ -190,6 +175,10 @@ export default function Layout({ children, currentPageName }) {
       if (item.page === 'SalesHistory' && (item.permAlt || item.permAlt2)) {
         return hasPermission(item.perm) || hasPermission(item.permAlt) || hasPermission(item.permAlt2);
       }
+      // For dashboard/reports combined page, check if user has permission to view either
+      if (item.page === 'DashboardReports' && item.permAlt) {
+        return hasPermission(item.perm) || hasPermission(item.permAlt);
+      }
       return hasPermission(item.perm);
     }
     
@@ -218,6 +207,10 @@ export default function Layout({ children, currentPageName }) {
           // For sales history, check if user has permission to view or cancel sales
           if (item.page === 'SalesHistory' && (item.permAlt || item.permAlt2)) {
             return hasPermission(item.perm) || hasPermission(item.permAlt) || hasPermission(item.permAlt2);
+          }
+          // For dashboard/reports combined page, check if user has permission to view either
+          if (item.page === 'DashboardReports' && item.permAlt) {
+            return hasPermission(item.perm) || hasPermission(item.permAlt);
           }
           return hasPermission(item.perm);
         }
@@ -283,20 +276,6 @@ export default function Layout({ children, currentPageName }) {
             <Menu className="h-6 w-6" />
           </Button>
           <h1 className="text-lg font-bold text-foreground">Nobee</h1>
-          {!isSeller && (
-            <div className="flex items-center gap-2">
-              <Link to={createPageUrl("Notifications")}>
-                <Button variant="ghost" size="icon" className="relative">
-                  <Bell className="h-5 w-5" />
-                  {notifications.length > 0 && (
-                    <Badge className="absolute -top-1 -right-1 h-5 w-5 flex items-center justify-center p-0 bg-red-500">
-                      {notifications.length}
-                    </Badge>
-                  )}
-                </Button>
-              </Link>
-            </div>
-          )}
         </div>
       </header>
 
@@ -386,11 +365,6 @@ export default function Layout({ children, currentPageName }) {
                 >
                   <item.icon className={`h-5 w-5 ${isActive ? 'text-primary' : 'text-foreground'}`} />
                   <span>{item.name}</span>
-                  {item.page === "Notifications" && notifications.length > 0 && (
-                    <Badge className="mr-auto bg-red-500 text-white">
-                      {notifications.length}
-                    </Badge>
-                  )}
                 </Link>
               );
             })}

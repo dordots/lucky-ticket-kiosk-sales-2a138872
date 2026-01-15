@@ -1,0 +1,760 @@
+import React, { useState, useEffect, useMemo } from "react";
+import { auth, Sale, TicketType, User } from "@/api/entities";
+import { useQuery } from "@tanstack/react-query";
+import { Link } from "react-router-dom";
+import { createPageUrl } from "@/utils";
+import { useKiosk } from "@/contexts/KioskContext";
+import { format, startOfDay, endOfDay, startOfMonth, endOfMonth, eachDayOfInterval, subDays, subMonths } from "date-fns";
+import { he } from "date-fns/locale";
+import * as salesService from "@/firebase/services/sales";
+import * as ticketTypesService from "@/firebase/services/ticketTypes";
+import { 
+  DollarSign, 
+  ShoppingCart, 
+  Package, 
+  Users,
+  ArrowLeft,
+  TrendingUp,
+  BarChart3,
+  Download
+} from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import {
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  ResponsiveContainer,
+  PieChart,
+  Pie,
+  Cell,
+  Legend
+} from "recharts";
+
+import StatsCard from "@/components/dashboard/StatsCard";
+import RecentSalesTable from "@/components/dashboard/RecentSalesTable";
+import LowStockAlert from "@/components/dashboard/LowStockAlert";
+import SalesChart from "@/components/dashboard/SalesChart";
+
+const COLORS = ['#6366f1', '#8b5cf6', '#a855f7', '#d946ef', '#ec4899', '#f43f5e', '#f97316', '#eab308'];
+
+// Payment method colors - distinct colors for each payment method
+const PAYMENT_METHOD_COLORS = {
+  cash: '#10b981', // Green for cash
+  card: '#3b82f6', // Blue for card
+  מזומן: '#10b981', // Green for cash (Hebrew)
+  כרטיס: '#3b82f6', // Blue for card (Hebrew)
+};
+
+export default function DashboardReports() {
+  const [user, setUser] = useState(null);
+  const [salesPeriod, setSalesPeriod] = useState("week"); // day, week, month, year
+  const [reportPeriod, setReportPeriod] = useState("day"); // day, week, month, quarter
+  const { currentKiosk, isLoading: kioskLoading } = useKiosk();
+
+  const hasPermission = (perm) => {
+    if (!user) return false;
+    if (user.role !== 'assistant') return true;
+    if (!perm) return true;
+    return Array.isArray(user.permissions) ? user.permissions.includes(perm) : false;
+  };
+
+  useEffect(() => {
+    const loadUser = async () => {
+      try {
+        const userData = await auth.me();
+        setUser(userData);
+      } catch (e) {
+        console.log("User not logged in");
+      }
+    };
+    loadUser();
+  }, []);
+
+  const { data: sales = [], isLoading: salesLoading } = useQuery({
+    queryKey: ['sales-dashboard-reports', currentKiosk?.id],
+    queryFn: () => {
+      if (currentKiosk?.id) {
+        return salesService.getSalesByKiosk(currentKiosk.id, 1000);
+      } else if (user?.role === 'system_manager') {
+        return salesService.getAllSales(1000);
+      }
+      return [];
+    },
+    enabled: !kioskLoading && (!!currentKiosk || user?.role === 'system_manager'),
+    staleTime: 2 * 60 * 1000, // 2 minutes
+  });
+
+  const { data: tickets = [], isLoading: ticketsLoading } = useQuery({
+    queryKey: ['tickets-dashboard-reports', currentKiosk?.id],
+    queryFn: () => {
+      if (currentKiosk?.id) {
+        return ticketTypesService.getTicketTypesByKiosk(currentKiosk.id);
+      } else if (user?.role === 'system_manager') {
+        return ticketTypesService.getAllTicketTypes();
+      }
+      return [];
+    },
+    enabled: !kioskLoading && (!!currentKiosk || user?.role === 'system_manager'),
+    staleTime: 2 * 60 * 1000, // 2 minutes
+  });
+
+  const { data: users = [] } = useQuery({
+    queryKey: ['users-all'],
+    queryFn: () => User.list(),
+  });
+
+  // Calculate stats for today and month
+  const today = new Date();
+  const stats = useMemo(() => {
+    const todayStart = startOfDay(today);
+    const todayEnd = endOfDay(today);
+    const monthStart = startOfMonth(today);
+
+    const todaySales = sales.filter(sale => {
+      const saleDate = new Date(sale.created_date);
+      return saleDate >= todayStart && saleDate <= todayEnd && sale.status === 'completed';
+    });
+
+    const monthSales = sales.filter(sale => {
+      const saleDate = new Date(sale.created_date);
+      return saleDate >= monthStart && sale.status === 'completed';
+    });
+
+    const todayRevenue = todaySales.reduce((sum, sale) => sum + (sale.total_amount || 0), 0);
+    const monthRevenue = monthSales.reduce((sum, sale) => sum + (sale.total_amount || 0), 0);
+    const todayTickets = todaySales.reduce((sum, sale) => 
+      sum + (sale.items?.reduce((s, item) => s + item.quantity, 0) || 0), 0
+    );
+
+    const lowStockCount = tickets.filter(t => {
+      const quantityCounter = t.quantity_counter ?? 0;
+      const quantityVault = t.quantity_vault ?? 0;
+      const totalQuantity = quantityCounter + quantityVault;
+      const threshold = t.min_threshold || 10;
+      
+      return t.is_active && 
+             totalQuantity > 0 && 
+             quantityCounter > 0 && 
+             quantityCounter <= threshold;
+    }).length;
+    const activeUsers = users.filter(u => u.is_active !== false).length;
+
+    return {
+      todaySales,
+      monthSales,
+      todayRevenue,
+      monthRevenue,
+      todayTickets,
+      lowStockCount,
+      activeUsers,
+    };
+  }, [sales, tickets, users]);
+
+  const { todaySales, monthSales, todayRevenue, monthRevenue, todayTickets, lowStockCount, activeUsers } = stats;
+
+  // Calculate date ranges for report period
+  const ranges = {
+    day: { from: startOfDay(today), to: endOfDay(today) },
+    week: { from: subDays(today, 7), to: today },
+    month: { from: startOfMonth(today), to: endOfMonth(today) },
+    quarter: { from: subMonths(today, 3), to: today },
+  };
+
+  const currentRange = ranges[reportPeriod];
+
+  // Filter sales by report period
+  const periodSales = sales.filter(sale => {
+    const saleDate = new Date(sale.created_date);
+    return saleDate >= currentRange.from && saleDate <= currentRange.to && sale.status === 'completed';
+  });
+
+  // Daily Revenue Chart Data for reports
+  const dailyData = (() => {
+    const days = eachDayOfInterval({ start: currentRange.from, end: currentRange.to });
+    return days.map(day => {
+      const dayStart = startOfDay(day);
+      const dayEnd = endOfDay(day);
+      const daySales = periodSales.filter(sale => {
+        const saleDate = new Date(sale.created_date);
+        return saleDate >= dayStart && saleDate <= dayEnd;
+      });
+      return {
+        date: format(day, "dd/MM"),
+        revenue: daySales.reduce((sum, s) => sum + (s.total_amount || 0), 0),
+        count: daySales.length,
+      };
+    });
+  })();
+
+  // Ticket Type Distribution (for reports - more detailed than top tickets)
+  const ticketDistribution = (() => {
+    const distribution = {};
+    periodSales.forEach(sale => {
+      sale.items?.forEach(item => {
+        if (!distribution[item.ticket_name]) {
+          distribution[item.ticket_name] = { quantity: 0, revenue: 0 };
+        }
+        distribution[item.ticket_name].quantity += item.quantity;
+        distribution[item.ticket_name].revenue += item.total;
+      });
+    });
+    return Object.entries(distribution)
+      .map(([name, data]) => ({ name, ...data }))
+      .sort((a, b) => b.revenue - a.revenue);
+  })();
+
+  // Seller Performance
+  const sellerPerformance = (() => {
+    const performance = {};
+    periodSales.forEach(sale => {
+      const seller = sale.seller_name || 'לא ידוע';
+      if (!performance[seller]) {
+        performance[seller] = { count: 0, revenue: 0, items: 0 };
+      }
+      performance[seller].count += 1;
+      performance[seller].revenue += sale.total_amount || 0;
+      performance[seller].items += sale.items?.reduce((s, i) => s + i.quantity, 0) || 0;
+    });
+    return Object.entries(performance)
+      .map(([name, data]) => ({ name, ...data }))
+      .sort((a, b) => b.revenue - a.revenue);
+  })();
+
+  // Payment Method Distribution
+  const paymentDistribution = (() => {
+    const labels = { cash: 'מזומן', card: 'כרטיס' };
+    const distribution = { cash: 0, card: 0 };
+    periodSales.forEach(sale => {
+      const method = sale.payment_method || 'cash';
+      if (distribution.hasOwnProperty(method)) {
+        distribution[method] += sale.total_amount || 0;
+      }
+    });
+    return Object.entries(distribution).map(([key, value]) => ({
+      name: labels[key],
+      value,
+      method: key,
+    }));
+  })();
+
+  // Summary Stats for report period
+  const totalRevenue = periodSales.reduce((sum, s) => sum + (s.total_amount || 0), 0);
+  const totalSales = periodSales.length;
+  const totalItems = periodSales.reduce((sum, s) => 
+    sum + (s.items?.reduce((is, i) => is + i.quantity, 0) || 0), 0
+  );
+  const avgSale = totalSales > 0 ? totalRevenue / totalSales : 0;
+  
+  // Personal Profit (only for franchisees with commission_set)
+  const personalProfit = user?.role === 'franchisee' && user?.commission_set && user?.commission_rate
+    ? totalRevenue * (user.commission_rate / 100)
+    : null;
+
+  const handleExportReport = () => {
+    if (user?.role === 'assistant' && !hasPermission('reports_export')) {
+      alert('אין לך הרשאה לייצא דוחות');
+      return;
+    }
+    // Helper function to escape CSV values
+    const escapeCSV = (value) => {
+      if (value === null || value === undefined) return '';
+      const stringValue = String(value);
+      if (stringValue.includes(',') || stringValue.includes('"') || stringValue.includes('\n')) {
+        return `"${stringValue.replace(/"/g, '""')}"`;
+      }
+      return stringValue;
+    };
+
+    // Build CSV content
+    const csvRows = [];
+    
+    // Header section
+    csvRows.push('דוח מכירות');
+    csvRows.push(`תקופה: ${reportPeriod === 'day' ? 'היום' : reportPeriod === 'week' ? 'שבוע' : reportPeriod === 'month' ? 'חודש' : 'רבעון'}`);
+    csvRows.push(`תאריכים: ${format(currentRange.from, 'dd/MM/yyyy')} - ${format(currentRange.to, 'dd/MM/yyyy')}`);
+    csvRows.push('');
+    
+    // Summary section
+    csvRows.push('סיכום כללי');
+    csvRows.push(['מטריקה', 'ערך'].map(escapeCSV).join(','));
+    csvRows.push(['סה"כ הכנסות', `₪${totalRevenue.toFixed(2)}`].map(escapeCSV).join(','));
+    csvRows.push(['מספר עסקאות', totalSales].map(escapeCSV).join(','));
+    csvRows.push(['סה"כ כרטיסים נמכרו', totalItems].map(escapeCSV).join(','));
+    csvRows.push(['ממוצע לעסקה', `₪${avgSale.toFixed(2)}`].map(escapeCSV).join(','));
+    csvRows.push('');
+    
+    // Daily data section
+    csvRows.push('הכנסות יומיות');
+    csvRows.push(['תאריך', 'הכנסות (₪)', 'מספר עסקאות'].map(escapeCSV).join(','));
+    dailyData.forEach(day => {
+      csvRows.push([
+        day.date,
+        day.revenue.toFixed(2),
+        day.count
+      ].map(escapeCSV).join(','));
+    });
+    csvRows.push('');
+    
+    // Ticket distribution section
+    csvRows.push('מכירות לפי סוג כרטיס');
+    csvRows.push(['סוג כרטיס', 'כמות', 'הכנסות (₪)'].map(escapeCSV).join(','));
+    ticketDistribution.forEach(ticket => {
+      csvRows.push([
+        ticket.name,
+        ticket.quantity,
+        ticket.revenue.toFixed(2)
+      ].map(escapeCSV).join(','));
+    });
+    csvRows.push('');
+    
+    // Seller performance section
+    csvRows.push('ביצועי מוכרים');
+    csvRows.push(['מוכר', 'מספר עסקאות', 'הכנסות (₪)', 'כרטיסים נמכרו'].map(escapeCSV).join(','));
+    sellerPerformance.forEach(seller => {
+      csvRows.push([
+        seller.name,
+        seller.count,
+        seller.revenue.toFixed(2),
+        seller.items
+      ].map(escapeCSV).join(','));
+    });
+    
+    // Payment distribution section
+    csvRows.push('');
+    csvRows.push('התפלגות אמצעי תשלום');
+    csvRows.push(['אמצעי תשלום', 'הכנסות (₪)'].map(escapeCSV).join(','));
+    paymentDistribution.forEach(payment => {
+      csvRows.push([
+        payment.name,
+        payment.value.toFixed(2)
+      ].map(escapeCSV).join(','));
+    });
+    
+    // Join all rows and create CSV file
+    const csvContent = csvRows.join('\n');
+    const blob = new Blob(["\ufeff" + csvContent], { type: 'text/csv;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `report_${reportPeriod}_${format(new Date(), 'yyyy-MM-dd')}.csv`;
+    a.click();
+  };
+
+  const CustomTooltip = ({ active, payload, label }) => {
+    if (active && payload && payload.length) {
+      return (
+        <div className="bg-card rounded-lg shadow-lg p-3 border border-border">
+          <p className="text-sm font-medium text-foreground mb-1">{label}</p>
+          {payload.map((entry, index) => (
+            <p key={index} className="text-sm text-foreground">
+              <span style={{ color: entry.color }}>●</span> {entry.name}: ₪{entry.value?.toFixed(2)}
+            </p>
+          ))}
+        </div>
+      );
+    }
+    return null;
+  };
+
+  const isOwner = user?.position === 'owner' || user?.role === 'admin';
+
+  const handleViewSale = (sale) => {
+    window.location.href = createPageUrl(`SaleDetails?id=${sale.id}`);
+  };
+
+  const handleEditSale = (sale) => {
+    window.location.href = createPageUrl(`EditSale?id=${sale.id}`);
+  };
+
+  const handleDeleteSale = (sale) => {
+    window.location.href = createPageUrl(`DeleteSale?id=${sale.id}`);
+  };
+
+  const isLoading = salesLoading || ticketsLoading;
+
+  // Permission guard for assistants
+  if (user && user.role === 'assistant') {
+    if (!hasPermission('dashboard_view') && !hasPermission('reports_view')) {
+      return (
+        <div className="text-center py-12">
+          <p className="text-muted-foreground">אין לך הרשאה לגשת לעמוד זה</p>
+        </div>
+      );
+    }
+  }
+
+  if (isLoading) {
+    return (
+      <div className="space-y-8">
+        <div className="flex items-center justify-center min-h-[400px]">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-8">
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-bold text-foreground">לוח בקרה ודוחות</h1>
+          <p className="text-muted-foreground">
+            {format(today, "EEEE, d בMMMM yyyy", { locale: he })}
+          </p>
+        </div>
+        <div className="flex items-center gap-3">
+          <Tabs value={reportPeriod} onValueChange={setReportPeriod}>
+            <TabsList>
+              <TabsTrigger value="day">היום</TabsTrigger>
+              <TabsTrigger value="week">שבוע</TabsTrigger>
+              <TabsTrigger value="month">חודש</TabsTrigger>
+              <TabsTrigger value="quarter">רבעון</TabsTrigger>
+            </TabsList>
+          </Tabs>
+          <Button variant="outline" onClick={handleExportReport}>
+            <Download className="h-4 w-4 ml-2" />
+            ייצוא דוח
+          </Button>
+          <Link to={createPageUrl("SellerPOS")}>
+            <Button className="bg-theme-gradient">
+              <ShoppingCart className="h-4 w-4 ml-2" />
+              מכירה חדשה
+            </Button>
+          </Link>
+        </div>
+      </div>
+
+      {/* Stats Grid - Reduced to essential cards */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <StatsCard
+          title={reportPeriod === 'day' ? "הכנסות היום" : `הכנסות ${reportPeriod === 'week' ? 'השבוע' : reportPeriod === 'month' ? 'החודש' : 'הרבעון'}`}
+          value={`₪${reportPeriod === 'day' ? todayRevenue.toFixed(2) : totalRevenue.toFixed(2)}`}
+          icon={DollarSign}
+          color="green"
+          delay={0}
+        />
+        <StatsCard
+          title={reportPeriod === 'day' ? "כרטיסים נמכרו היום" : "כרטיסים נמכרו"}
+          value={reportPeriod === 'day' ? todayTickets : totalItems}
+          icon={ShoppingCart}
+          color="indigo"
+          delay={0.1}
+        />
+        <StatsCard
+          title="מלאי קריטי"
+          value={lowStockCount}
+          icon={Package}
+          color={lowStockCount > 0 ? "orange" : "blue"}
+          delay={0.2}
+          description="כרטיסים שהמלאי שלהם נמוך מסף ההתראה"
+        />
+        <StatsCard
+          title="הכנסות החודש"
+          value={`₪${monthRevenue.toFixed(2)}`}
+          icon={TrendingUp}
+          color="blue"
+          delay={0.3}
+        />
+      </div>
+
+      {/* Report Period Summary Cards - Only show when period is not 'day' to avoid duplication */}
+      {reportPeriod !== 'day' && (
+        <div className={`grid grid-cols-1 sm:grid-cols-2 ${personalProfit !== null ? 'lg:grid-cols-4' : 'lg:grid-cols-3'} gap-4`}>
+          <Card className="bg-gradient-to-br from-emerald-500 to-teal-600 text-white">
+            <CardContent className="p-4">
+              <div className="flex items-center gap-3 mb-2">
+                <BarChart3 className="h-5 w-5 text-emerald-200" />
+                <span className="text-emerald-100">עסקאות</span>
+              </div>
+              <p className="text-2xl font-bold">{totalSales}</p>
+            </CardContent>
+          </Card>
+          <Card className="bg-gradient-to-br from-blue-500 to-cyan-600 text-white">
+            <CardContent className="p-4">
+              <div className="flex items-center gap-3 mb-2">
+                <TrendingUp className="h-5 w-5 text-blue-200" />
+                <span className="text-blue-100">ממוצע לעסקה</span>
+              </div>
+              <p className="text-2xl font-bold">₪{avgSale.toFixed(2)}</p>
+            </CardContent>
+          </Card>
+          {personalProfit !== null && (
+            <Card className="bg-gradient-to-br from-green-500 to-emerald-600 text-white">
+              <CardContent className="p-4">
+                <div className="flex items-center gap-3 mb-2">
+                  <DollarSign className="h-5 w-5 text-green-200" />
+                  <span className="text-green-100">רווח אישי ({user?.commission_rate}%)</span>
+                </div>
+                <p className="text-2xl font-bold">₪{personalProfit.toFixed(2)}</p>
+              </CardContent>
+            </Card>
+          )}
+        </div>
+      )}
+      
+      {/* Commission Not Set Message */}
+      {user?.role === 'franchisee' && !user?.commission_set && (
+        <Card className="bg-amber-50 dark:bg-amber-900/20 border-amber-200 dark:border-amber-800">
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <DollarSign className="h-5 w-5 text-amber-600 dark:text-amber-400" />
+                <div>
+                  <p className="font-medium text-foreground">הגדר עמלה כדי לראות את הרווחים האישיים שלך</p>
+                  <p className="text-sm text-muted-foreground">עבור להגדרות כדי להגדיר את גובה העמלה שלך</p>
+                </div>
+              </div>
+              <Button 
+                onClick={() => window.location.href = '/Settings'}
+                className="bg-amber-600 hover:bg-amber-700"
+              >
+                הגדר עמלה עכשיו
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Low Stock Alert */}
+      <LowStockAlert tickets={tickets} />
+
+      {/* Charts Row 1 */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* Sales Chart - Combined from Dashboard */}
+        <Card className="shadow-sm">
+          <CardHeader className="flex flex-row items-center justify-between">
+            <CardTitle className="text-lg">
+              {salesPeriod === "day" && "מכירות היום"}
+              {salesPeriod === "week" && "מכירות השבוע"}
+              {salesPeriod === "month" && "מכירות החודש"}
+              {salesPeriod === "year" && "מכירות השנה"}
+            </CardTitle>
+            <div className="flex gap-2">
+              <Button
+                variant={salesPeriod === "day" ? "default" : "outline"}
+                size="sm"
+                onClick={() => setSalesPeriod("day")}
+                className={salesPeriod === "day" ? "bg-primary hover:bg-primary/90" : ""}
+              >
+                יום
+              </Button>
+              <Button
+                variant={salesPeriod === "week" ? "default" : "outline"}
+                size="sm"
+                onClick={() => setSalesPeriod("week")}
+                className={salesPeriod === "week" ? "bg-primary hover:bg-primary/90" : ""}
+              >
+                שבוע
+              </Button>
+              <Button
+                variant={salesPeriod === "month" ? "default" : "outline"}
+                size="sm"
+                onClick={() => setSalesPeriod("month")}
+                className={salesPeriod === "month" ? "bg-primary hover:bg-primary/90" : ""}
+              >
+                חודש
+              </Button>
+              <Button
+                variant={salesPeriod === "year" ? "default" : "outline"}
+                size="sm"
+                onClick={() => setSalesPeriod("year")}
+                className={salesPeriod === "year" ? "bg-primary hover:bg-primary/90" : ""}
+              >
+                שנה
+              </Button>
+            </div>
+          </CardHeader>
+          <CardContent>
+            <SalesChart sales={sales} period={salesPeriod} />
+          </CardContent>
+        </Card>
+
+        {/* Daily Revenue Chart - From Reports */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-lg">הכנסות יומיות ({reportPeriod === 'day' ? 'היום' : reportPeriod === 'week' ? 'שבוע' : reportPeriod === 'month' ? 'חודש' : 'רבעון'})</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="h-[300px]">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={dailyData}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+                  <XAxis dataKey="date" stroke="#94a3b8" fontSize={12} />
+                  <YAxis stroke="#94a3b8" fontSize={12} tickFormatter={(v) => `₪${v}`} />
+                  <Tooltip 
+                    content={<CustomTooltip />}
+                    contentStyle={{ 
+                      backgroundColor: 'hsl(var(--card))',
+                      border: '1px solid hsl(var(--border))',
+                      color: 'hsl(var(--foreground))'
+                    }}
+                    itemStyle={{ color: 'hsl(var(--foreground))' }}
+                    labelStyle={{ color: 'hsl(var(--foreground))' }}
+                  />
+                  <Bar dataKey="revenue" fill="#6366f1" radius={[4, 4, 0, 0]} name="הכנסות" />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Charts Row 2 */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* Ticket Distribution - More detailed than top tickets */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-lg">מכירות לפי סוג כרטיס ({reportPeriod === 'day' ? 'היום' : reportPeriod === 'week' ? 'שבוע' : reportPeriod === 'month' ? 'חודש' : 'רבעון'})</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-4">
+              {ticketDistribution.length > 0 ? ticketDistribution.slice(0, 6).map((ticket, index) => {
+                const maxRevenue = ticketDistribution[0]?.revenue || 1;
+                return (
+                  <div key={ticket.name} className="space-y-2">
+                    <div className="flex items-center justify-between">
+                      <span className="font-medium text-foreground">{ticket.name}</span>
+                      <div className="text-left">
+                        <span className="font-bold text-primary">₪{ticket.revenue.toFixed(2)}</span>
+                        <span className="text-sm text-muted-foreground mr-2">({ticket.quantity} יח')</span>
+                      </div>
+                    </div>
+                    <div className="h-2 bg-accent rounded-full overflow-hidden">
+                      <div 
+                        className="h-full rounded-full"
+                        style={{ 
+                          width: `${(ticket.revenue / maxRevenue) * 100}%`,
+                          backgroundColor: COLORS[index % COLORS.length]
+                        }}
+                      />
+                    </div>
+                  </div>
+                );
+              }) : (
+                <div className="text-center py-8 text-muted-foreground">
+                  <Package className="h-12 w-12 mx-auto mb-3 opacity-30" />
+                  <p>אין מכירות בתקופה זו</p>
+                  <p className="text-sm text-muted-foreground">בצע מכירות כדי לראות נתונים</p>
+                </div>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Payment Methods */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-lg">התפלגות אמצעי תשלום</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="h-[300px]">
+              <ResponsiveContainer width="100%" height="100%">
+                <PieChart>
+                  <Pie
+                    data={paymentDistribution}
+                    cx="50%"
+                    cy="50%"
+                    innerRadius={60}
+                    outerRadius={100}
+                    paddingAngle={5}
+                    dataKey="value"
+                    label={false}
+                  >
+                    {paymentDistribution.map((entry, index) => (
+                      <Cell 
+                        key={`cell-${index}`} 
+                        fill={PAYMENT_METHOD_COLORS[entry.method] || PAYMENT_METHOD_COLORS[entry.name] || COLORS[index % COLORS.length]} 
+                      />
+                    ))}
+                  </Pie>
+                  <Legend 
+                    formatter={(value) => value}
+                    wrapperStyle={{ color: 'hsl(var(--foreground))' }}
+                    iconType="circle"
+                  />
+                  <Tooltip 
+                    formatter={(value) => `₪${value.toFixed(2)}`}
+                    contentStyle={{ 
+                      backgroundColor: 'hsl(var(--card))',
+                      border: '1px solid hsl(var(--border))',
+                      color: 'hsl(var(--foreground))'
+                    }}
+                    itemStyle={{ color: 'hsl(var(--foreground))' }}
+                    labelStyle={{ color: 'hsl(var(--foreground))' }}
+                  />
+                </PieChart>
+              </ResponsiveContainer>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Charts Row 3 */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* Seller Performance */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-lg">ביצועי מוכרים</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-4">
+              {sellerPerformance.length > 0 ? sellerPerformance.slice(0, 6).map((seller, index) => (
+                <div key={seller.name} className="flex items-center justify-between p-3 bg-slate-50 dark:bg-accent rounded-lg">
+                  <div className="flex items-center gap-3">
+                    <div className={`w-8 h-8 rounded-full flex items-center justify-center text-white font-medium`}
+                      style={{ backgroundColor: COLORS[index % COLORS.length] }}
+                    >
+                      {seller.name.charAt(0)}
+                    </div>
+                    <div>
+                      <p className="font-medium text-foreground">{seller.name}</p>
+                      <p className="text-sm text-muted-foreground">{seller.count} עסקאות</p>
+                    </div>
+                  </div>
+                  <div className="text-left">
+                    <p className="font-bold text-indigo-600">₪{seller.revenue.toFixed(2)}</p>
+                    <p className="text-sm text-muted-foreground">{seller.items} כרטיסים</p>
+                  </div>
+                </div>
+              )) : (
+                <div className="text-center py-8 text-muted-foreground">
+                  <Users className="h-12 w-12 mx-auto mb-3 opacity-30" />
+                  <p>אין נתוני מוכרים עדיין</p>
+                  <p className="text-sm text-muted-foreground">הנתונים יופיעו לאחר מכירות</p>
+                </div>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Recent Sales */}
+        <Card className="shadow-sm">
+          <CardHeader className="flex flex-row items-center justify-between">
+            <CardTitle className="text-lg">עסקאות אחרונות</CardTitle>
+            <Link to={createPageUrl("SalesHistory")}>
+              <Button variant="ghost" size="sm">
+                הצג הכל
+                <ArrowLeft className="h-4 w-4 mr-2" />
+              </Button>
+            </Link>
+          </CardHeader>
+          <CardContent>
+            <RecentSalesTable 
+              sales={sales.slice(0, 10)} 
+              onView={handleViewSale}
+              onEdit={handleEditSale}
+              onDelete={handleDeleteSale}
+              isOwner={isOwner}
+            />
+          </CardContent>
+        </Card>
+      </div>
+    </div>
+  );
+}

@@ -9,6 +9,7 @@ import {
   query, 
   where, 
   orderBy,
+  limit,
   Timestamp 
 } from 'firebase/firestore';
 import { db } from '../config';
@@ -18,11 +19,30 @@ const COLLECTION_NAME = 'notifications';
 // Get all notifications
 export const getAllNotifications = async (orderByField = 'created_date', limitCount = 100) => {
   try {
+    // Get current user to filter by kiosk_id or user_id (required by Firebase Rules)
+    const { getCurrentUser } = await import('./auth');
+    const currentUser = await getCurrentUser();
+    
+    if (!currentUser) {
+      return [];
+    }
+    
     const notificationsRef = collection(db, COLLECTION_NAME);
+    
+    // Build query - prefer kiosk_id filter if available, otherwise use user_id
+    let q;
+    if (currentUser.kiosk_id) {
+      // Filter by user's kiosk_id if available (for stock notifications)
+      q = query(notificationsRef, where('kiosk_id', '==', currentUser.kiosk_id));
+    } else {
+      // Fallback to user_id
+      q = query(notificationsRef, where('user_id', '==', currentUser.uid));
+    }
+    
     const orderDirection = orderByField.startsWith('-') ? 'desc' : 'asc';
     const fieldName = orderByField.startsWith('-') ? orderByField.substring(1) : orderByField;
     
-    let q = query(notificationsRef, orderBy(fieldName, orderDirection));
+    q = query(q, orderBy(fieldName, orderDirection));
     if (limitCount) {
       q = query(q, limit(limitCount));
     }
@@ -42,7 +62,7 @@ export const getAllNotifications = async (orderByField = 'created_date', limitCo
 // Get notifications by filter
 export const getNotificationsByFilter = async (filters = {}) => {
   try {
-    // Get current user to filter by user_id (required by Firebase Rules)
+    // Get current user to filter by user_id or kiosk_id (required by Firebase Rules)
     const { getCurrentUser } = await import('./auth');
     const currentUser = await getCurrentUser();
     
@@ -52,8 +72,18 @@ export const getNotificationsByFilter = async (filters = {}) => {
     
     const notificationsRef = collection(db, COLLECTION_NAME);
     
-    // Always filter by user_id first (required by Firebase Rules)
-    let q = query(notificationsRef, where('user_id', '==', currentUser.uid));
+    // Build query - prefer kiosk_id filter if available, otherwise use user_id
+    let q;
+    if (filters.kiosk_id) {
+      // Filter by kiosk_id (for stock notifications)
+      q = query(notificationsRef, where('kiosk_id', '==', filters.kiosk_id));
+    } else if (currentUser.kiosk_id) {
+      // Filter by user's kiosk_id if available
+      q = query(notificationsRef, where('kiosk_id', '==', currentUser.kiosk_id));
+    } else {
+      // Fallback to user_id
+      q = query(notificationsRef, where('user_id', '==', currentUser.uid));
+    }
     
     // Apply additional filters (but avoid composite index issues)
     // If is_read filter is provided, we'll filter in memory to avoid index requirement
@@ -62,10 +92,16 @@ export const getNotificationsByFilter = async (filters = {}) => {
     if (needsIsReadFilter) {
       delete otherFilters.is_read;
     }
+    if (otherFilters.kiosk_id) {
+      delete otherFilters.kiosk_id; // Already filtered above
+    }
+    if (otherFilters.user_id) {
+      delete otherFilters.user_id; // Already filtered above or will be filtered
+    }
     
     // Apply other filters
     Object.keys(otherFilters).forEach(key => {
-      if (key !== 'user_id') {
+      if (key !== 'user_id' && key !== 'kiosk_id') {
         q = query(q, where(key, '==', otherFilters[key]));
       }
     });

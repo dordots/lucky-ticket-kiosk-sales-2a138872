@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
-import { auth, Sale, TicketType, Notification, AuditLog } from "@/api/entities";
+import { auth, Sale, TicketType, AuditLog } from "@/api/entities";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useKiosk } from "@/contexts/KioskContext";
 import * as ticketTypesService from "@/firebase/services/ticketTypes";
@@ -13,7 +13,8 @@ import {
   ChevronDown,
   Plus,
   Minus,
-  Trash2
+  Trash2,
+  AlertTriangle
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -26,6 +27,15 @@ import Cart from "@/components/pos/Cart";
 import PaymentDialog from "@/components/pos/PaymentDialog";
 import QuantityDialog from "@/components/pos/QuantityDialog";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 export default function SellerPOS() {
   const [user, setUser] = useState(null);
@@ -37,6 +47,7 @@ export default function SellerPOS() {
   const [selectedTicket, setSelectedTicket] = useState(null);
   const [isProcessing, setIsProcessing] = useState(false);
   const [saleCompleted, setSaleCompleted] = useState(false);
+  const [lowStockAlert, setLowStockAlert] = useState(null);
   const { currentKiosk, isLoading: kioskLoading } = useKiosk();
   const navigate = useNavigate();
   
@@ -75,11 +86,6 @@ export default function SellerPOS() {
     enabled: !kioskLoading && !!currentKiosk?.id,
   });
 
-  const { data: notifications = [] } = useQuery({
-    queryKey: ['notifications-unread'],
-    queryFn: () => Notification.filter({ is_read: false }),
-    staleTime: 2 * 60 * 1000, // 2 minutes for notifications
-  });
 
   // Load sales to calculate demand (total sales count per ticket)
   const { data: allSales = [] } = useQuery({
@@ -306,56 +312,10 @@ export default function SellerPOS() {
           }, currentKiosk.id);
         });
 
-        // Process notifications in parallel (non-blocking)
-        const notificationPromises = stockValidation.map(async ({ ticketId, ticket, item, currentQuantityCounter }) => {
-          try {
-            const newQuantityCounter = currentQuantityCounter - item.quantity;
-            
-            // Check for out of stock notification
-            if (newQuantityCounter === 0) {
-              const existingOutOfStockNotifs = await Notification.filter({
-                ticket_type_id: ticketId,
-                is_read: false,
-                notification_type: "out_of_stock",
-              });
-              
-              if (existingOutOfStockNotifs.length === 0) {
-                await Notification.create({
-                  ticket_type_id: ticketId,
-                  ticket_name: ticket.name,
-                  current_quantity: 0,
-                  threshold: ticket.min_threshold,
-                  notification_type: "out_of_stock",
-                });
-              }
-            }
-            // Check for low stock notification
-            else if (newQuantityCounter <= ticket.min_threshold && newQuantityCounter > 0) {
-              const existingLowStockNotifs = await Notification.filter({
-                ticket_type_id: ticketId,
-                is_read: false,
-                notification_type: "low_stock",
-              });
-              
-              if (existingLowStockNotifs.length === 0) {
-                await Notification.create({
-                  ticket_type_id: ticketId,
-                  ticket_name: ticket.name,
-                  current_quantity: newQuantityCounter,
-                  threshold: ticket.min_threshold,
-                  notification_type: "low_stock",
-                });
-              }
-            }
-          } catch (notificationError) {
-            console.error("Error creating stock notification:", notificationError);
-          }
-        });
 
         // Execute all operations in parallel
         await Promise.all([
           ...inventoryUpdates,
-          ...notificationPromises,
           // Create audit log (non-blocking)
           AuditLog.create({
             action: "create_sale",
@@ -370,10 +330,37 @@ export default function SellerPOS() {
           }),
         ]);
 
+        // Check for low stock or out of stock after sale
+        const lowStockTickets = [];
+        for (const { ticket, item, currentQuantityCounter } of stockValidation) {
+          const newQuantityCounter = currentQuantityCounter - item.quantity;
+          const threshold = ticket.min_threshold || 10;
+          
+          if (newQuantityCounter === 0) {
+            lowStockTickets.push({
+              name: ticket.name,
+              quantity: newQuantityCounter,
+              threshold: threshold,
+              type: 'out_of_stock'
+            });
+          } else if (newQuantityCounter <= threshold) {
+            lowStockTickets.push({
+              name: ticket.name,
+              quantity: newQuantityCounter,
+              threshold: threshold,
+              type: 'low_stock'
+            });
+          }
+        }
+
+        if (lowStockTickets.length > 0) {
+          setLowStockAlert(lowStockTickets);
+        }
+
         // Refresh data in background
         queryClient.invalidateQueries({ queryKey: ['tickets-active'] });
-        queryClient.invalidateQueries({ queryKey: ['notifications-unread'] });
-        queryClient.invalidateQueries({ queryKey: ['notifications-all'] });
+        queryClient.invalidateQueries({ queryKey: ['tickets-inventory'] });
+        queryClient.invalidateQueries({ queryKey: ['tickets-dashboard'] });
         queryClient.invalidateQueries({ queryKey: ['sales-for-demand'] });
 
       } catch (error) {
@@ -677,6 +664,46 @@ export default function SellerPOS() {
         itemsCount={getItemsCount}
         isProcessing={isProcessing}
       />
+
+      {/* Low Stock Alert Dialog */}
+      <AlertDialog open={!!lowStockAlert} onOpenChange={(open) => !open && setLowStockAlert(null)}>
+        <AlertDialogContent className="max-w-[calc(100vw-2rem)] sm:max-w-md" dir="rtl">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2">
+              <AlertTriangle className="h-5 w-5 text-amber-500" />
+              התראת מלאי
+            </AlertDialogTitle>
+            <AlertDialogDescription className="space-y-3 pt-2">
+              {lowStockAlert?.map((ticket, index) => (
+                <div key={index} className={`p-3 rounded-lg ${
+                  ticket.type === 'out_of_stock' 
+                    ? 'bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800' 
+                    : 'bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800'
+                }`}>
+                  <div className="flex items-center justify-between">
+                    <span className="font-medium text-foreground">{ticket.name}</span>
+                    <span className={`text-sm font-bold ${
+                      ticket.type === 'out_of_stock' ? 'text-red-600 dark:text-red-400' : 'text-amber-600 dark:text-amber-400'
+                    }`}>
+                      {ticket.type === 'out_of_stock' ? 'אזל מהמלאי!' : 'מלאי נמוך'}
+                    </span>
+                  </div>
+                  <p className="text-sm text-foreground mt-1">
+                    {ticket.type === 'out_of_stock' 
+                      ? 'המלאי בדלפק אזל לחלוטין' 
+                      : `המלאי בדלפק: ${ticket.quantity} יחידות (סף: ${ticket.threshold})`}
+                  </p>
+                </div>
+              ))}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogAction onClick={() => setLowStockAlert(null)}>
+              הבנתי
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

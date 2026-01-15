@@ -4,12 +4,10 @@ import Login from "./Login";
 
 // Lazy load pages for better performance
 const SellerPOS = lazy(() => import("./SellerPOS"));
-const Dashboard = lazy(() => import("./Dashboard"));
+const DashboardReports = lazy(() => import("./DashboardReports"));
 const Inventory = lazy(() => import("./Inventory"));
 const SalesHistory = lazy(() => import("./SalesHistory"));
 const UsersManagement = lazy(() => import("./UsersManagement"));
-const Reports = lazy(() => import("./Reports"));
-const Notifications = lazy(() => import("./Notifications"));
 const SaleDetails = lazy(() => import("./SaleDetails"));
 const EditSale = lazy(() => import("./EditSale"));
 const DeleteSale = lazy(() => import("./DeleteSale"));
@@ -35,12 +33,11 @@ const PageLoader = () => (
 
 const PAGES = {
     SellerPOS: SellerPOS,
-    Dashboard: Dashboard,
+    Dashboard: DashboardReports,
+    DashboardReports: DashboardReports,
     Inventory: Inventory,
     SalesHistory: SalesHistory,
     UsersManagement: UsersManagement,
-    Reports: Reports,
-    Notifications: Notifications,
     SaleDetails: SaleDetails,
     EditSale: EditSale,
     DeleteSale: DeleteSale,
@@ -84,17 +81,15 @@ function PagesContent() {
                     
                     <Route path="/SellerPOS" element={<SellerPOS />} />
                     
-                    <Route path="/Dashboard" element={<Dashboard />} />
+                    <Route path="/Dashboard" element={<DashboardReports />} />
+                    
+                    <Route path="/DashboardReports" element={<DashboardReports />} />
                     
                     <Route path="/Inventory" element={<Inventory />} />
                     
                     <Route path="/SalesHistory" element={<SalesHistory />} />
                     
                     <Route path="/UsersManagement" element={<UsersManagement />} />
-                    
-                    <Route path="/Reports" element={<Reports />} />
-                    
-                    <Route path="/Notifications" element={<Notifications />} />
                     
                     <Route path="/SaleDetails" element={<SaleDetails />} />
                     
