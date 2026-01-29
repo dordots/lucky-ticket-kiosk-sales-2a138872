@@ -170,7 +170,7 @@ export default function SellerPOS() {
     setCartItems(prev => ({
       ...prev,
       [selectedTicket.id]: {
-        quantity: (prev[selectedTicket.id]?.quantity || 0) + quantity,
+        quantity: quantity,
         unitPrice: selectedTicket.price,
         ticketName: selectedTicket.name,
       }
