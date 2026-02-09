@@ -649,7 +649,8 @@ export default function SellerPOS() {
         open={!!selectedTicket}
         onClose={() => setSelectedTicket(null)}
         ticket={selectedTicket}
-        currentQty={selectedTicket ? (cartItems[selectedTicket.id]?.quantity || 0) : 0}
+        currentQty={1}
+        existingQtyInCart={selectedTicket ? (cartItems[selectedTicket.id]?.quantity || 0) : 0}
         onConfirm={handleAddToCart}
       />
 

@@ -15,6 +15,7 @@ export default function QuantityDialog({
   onClose, 
   ticket, 
   currentQty,
+  existingQtyInCart = 0,
   onConfirm 
 }) {
   const [quantity, setQuantity] = useState(currentQty || 1);
@@ -118,9 +119,14 @@ export default function QuantityDialog({
           </div>
 
           {/* Stock Info */}
-          <p className="text-center text-sm text-muted-foreground">
-            במלאי: {ticket.quantity_counter ?? 0} יחידות
-          </p>
+          <div className="space-y-1 text-center text-sm text-muted-foreground">
+            <p>במלאי: {ticket.quantity_counter ?? 0} יחידות</p>
+            {existingQtyInCart > 0 && (
+              <p className="text-primary font-medium">
+                כבר בעגלה: {existingQtyInCart} יחידות
+              </p>
+            )}
+          </div>
         </div>
 
         <DialogFooter className="gap-3 sm:gap-3">
