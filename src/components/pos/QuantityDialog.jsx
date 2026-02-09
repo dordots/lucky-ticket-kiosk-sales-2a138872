@@ -137,7 +137,7 @@ export default function QuantityDialog({
             onClick={handleConfirm}
             className="flex-1 bg-theme-gradient"
           >
-            הוסף לעגלה
+            {existingQtyInCart > 0 ? "עדכן עגלה" : "הוסף לעגלה"}
           </Button>
         </DialogFooter>
       </DialogContent>

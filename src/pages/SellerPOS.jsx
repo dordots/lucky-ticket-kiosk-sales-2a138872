@@ -170,7 +170,7 @@ export default function SellerPOS() {
     setCartItems(prev => ({
       ...prev,
       [selectedTicket.id]: {
-        quantity: (prev[selectedTicket.id]?.quantity || 0) + quantity,
+        quantity: quantity,
         unitPrice: selectedTicket.price,
         ticketName: selectedTicket.name,
       }
@@ -649,7 +649,7 @@ export default function SellerPOS() {
         open={!!selectedTicket}
         onClose={() => setSelectedTicket(null)}
         ticket={selectedTicket}
-        currentQty={1}
+        currentQty={selectedTicket ? Math.max(1, cartItems[selectedTicket.id]?.quantity || 0) : 1}
         existingQtyInCart={selectedTicket ? (cartItems[selectedTicket.id]?.quantity || 0) : 0}
         onConfirm={handleAddToCart}
       />
